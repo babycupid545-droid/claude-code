@@ -5,6 +5,7 @@ your butt to knock other chickens into it. Last chicken (or team) alive wins.
 
 - Design and plan: [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md)
 - Art brief: [`docs/ASSETS.md`](docs/ASSETS.md)
+- Setup + test checklist: [`docs/TESTING.md`](docs/TESTING.md)
 
 ## Getting it into Roblox Studio
 
