@@ -1,0 +1,154 @@
+# Why Did The Chicken… — Game Design & Tech Plan
+
+A Roblox elimination game. You're a chicken. Cars fly down many lanes at very high speed.
+You can jump high, glide, and shoot eggs out of your butt at other chickens.
+Last chicken (or last team) alive wins.
+
+---
+
+## 1. Core loop
+
+```
+ ┌──────────┐  vote mode   ┌───────────┐  load map   ┌────────┐
+ │  LOBBY   │ ───────────▶ │  INTERMISSION │ ───────▶ │  GAME  │
+ └──────────┘   (15 s)     └───────────┘   (5 s)     └────────┘
+      ▲                                                  │ hit by car / egg-knocked
+      │                                                  ▼
+      │          round ends (1 player/team left)   ┌────────────┐
+      └──────────────────── results + win effect ◀─│ ELIMINATED │ (spectate)
+                                                   └────────────┘
+```
+
+Implemented as a **server-side state machine** (`Lobby → Voting → Loading → InRound → Results → Lobby`).
+The current state + timer is replicated with attributes on `ReplicatedStorage.RoundState`, so every client UI just
+listens to `GetAttributeChangedSignal` — no polling, no custom sync code.
+
+**Recommendation: one place, not two.** Lobby and arena live in the same server; the arena map is cloned from
+`ServerStorage.Maps` at round start and destroyed after. TeleportService between a lobby place and a game place adds
+5–15 s of loading per round and breaks the "quick rounds with friends" feel. Switch to multi-place only if you later
+need 50+ player servers.
+
+---
+
+## 2. Game modes (voted every round)
+
+| Mode | Rules | Why it's fun |
+|---|---|---|
+| **Solo** | Free-for-all. Last chicken alive. | The base game. |
+| **Teams** | Red spawns on one side, Blue on the other. Last team with anyone alive. | Eggs fly *across* the traffic — you shoot over the road. |
+| **Rush Hour** *(suggested)* | Traffic starts slow and gets faster/denser every 15 s. | Guaranteed ending, rising tension. |
+| **Road Rage** *(suggested)* | When you die, you respawn **as a car driver** and can steer a car within your lane to hunt chickens. | Eliminated players keep playing — fixes the boring "dead, wait 3 min" problem. |
+| **Golden Egg** *(suggested)* | Teams. A golden egg sits on each side. Carry the enemy egg back across the road to score; carrier can't glide. First to 3. | Gives crossing the road a real *reason*. |
+| **Hot Egg** *(suggested)* | One player holds a ticking egg. Hit someone with it to pass it. Holder when it pops is out. | Chaotic, short rounds. |
+| **Crossing Race** *(suggested)* | Not elimination: first to cross the road N times wins. Eggs knock people back. | Lighter mode for new players. |
+| **Floor is Lava Road** *(suggested)* | Lanes randomly turn into lava/river; safe lanes shrink. | Map variety with no new code for eggs/cars. |
+
+Voting: 3 random modes are offered each lobby (not all of them — fewer choices = faster votes). Majority wins, ties
+are random. Modes are data-driven modules (`Modes/Solo.luau`, `Modes/Teams.luau` …) that implement the same
+interface: `setup(players, map)`, `onEliminated(player)`, `checkWinner()`, `cleanup()`. Adding a mode = adding one
+file.
+
+---
+
+## 3. Mechanics — how to build each one well
+
+### 3.1 Cars that are *super fast* (the hardest part)
+Fast physics parts replicated from the server **look jittery and hit unfairly** because of network latency.
+The proven approach (used by most "Crossy Road"-style Roblox games):
+
+1. Server decides a **schedule**: `{lane, spawnTime, speed, carType}` using a seeded RNG, and sends the seed + round
+   start time to clients once.
+2. **Every client spawns and moves cars locally** (anchored models, CFrame updated in `RunService.Heartbeat`) using
+   `workspace:GetServerTimeNow()`, so everyone sees the same car at the same place.
+3. **Hits are checked on the server** with the same math: car position is a pure function of time, so the server
+   can check "was a car overlapping this chicken at time T" without any car parts existing on the server.
+   Allow a small latency forgiveness window.
+
+Result: buttery-smooth 200+ stud/s cars, zero network cost per car, and hits that can't be faked.
+
+### 3.2 Jump high + glide
+- High jump: `Humanoid.UseJumpPower = true`, `JumpPower ≈ 90–110`.
+- Glide: when the player holds jump while falling, enable a `VectorForce` (or clamp `AssemblyLinearVelocity.Y`
+  to e.g. `-8` in a client `Heartbeat`) and play a flapping animation. Movement is owned by the client (characters
+  already are), so this feels instant. A stamina bar stops infinite glide.
+- Mobile: a dedicated glide button via `ContextActionService:BindAction(..., true)`.
+
+### 3.3 Butt eggs
+- Client: on click, plays animation + spawns a **visual** egg immediately (no lag feel), and fires
+  `RemoteEvent ShootEgg(origin, direction)`.
+- Server: validates (cooldown, origin near the character, alive, in round), then simulates the projectile with
+  **raycast stepping** (FastCast-style: each frame, raycast from last position to new position with gravity),
+  so fast eggs never pass through targets.
+- Server tells all other clients to draw the egg (with the shooter's equipped **egg skin**).
+- On hit → server applies the effect (see open question: knockback vs. damage vs. instant out) and fires the hit
+  effect with the shooter's **hit effect** cosmetic.
+
+### 3.4 Elimination & spectating
+On death the server marks `player:SetAttribute("Alive", false)`, the mode's `onEliminated` runs, and the client
+switches to a spectate camera cycling living players. When the round ends everyone is respawned in the lobby.
+
+---
+
+## 4. Cosmetics
+
+| Slot | What it changes | How |
+|---|---|---|
+| Chicken skin | Character model | Custom `StarterCharacter`-style rig per skin, swapped via `player:LoadCharacter()` with `HumanoidDescription` off; or one rig + texture/MeshPart swaps |
+| Egg skin | Projectile mesh/material/trail | Look-up by id when drawing eggs |
+| Hit effect | Particles/sound where an egg lands | `ParticleEmitter:Emit(n)` at hit point |
+| Win effect | Celebration on the winner | Fireworks/confetti + camera focus on winner during Results |
+| Emotes | Animations | `AnimationTrack`s from an emote wheel (keys 1–8 / mobile wheel) |
+
+All cosmetics are defined in **one data table** (`Shared/Cosmetics.luau`): `id, slot, name, rarity, price, assetRef`.
+Shop, inventory, equipping, and rendering all read from it.
+
+---
+
+## 5. Data saving
+- Use **ProfileStore** (the maintained successor to ProfileService) for player data: coins, owned cosmetics,
+  equipped cosmetics, wins, stats. It handles session locking so items can't be duplicated.
+- Coins earned per round (participation + placement + egg hits). Robux sales through **Developer Products**
+  (coins bundles) and **Game Passes** (e.g. VIP), handled with `MarketplaceService.ProcessReceipt`.
+
+---
+
+## 6. Recommended project setup
+- **Rojo** to sync code from this Git repo into Roblox Studio (lets us version everything in Git).
+- **Luau** with `--!strict` types.
+- **Wally** for packages (ProfileStore, a signal lib).
+- Folder layout:
+```
+src/
+  server/         RoundService, ModeService, TrafficService, EggService, DataService, ShopService
+    Modes/        Solo, Teams, RushHour, RoadRage, ...
+  client/         RoundUI, VoteUI, GlideController, EggController, TrafficRenderer, SpectateCamera, EmoteWheel
+  shared/         Cosmetics, Config (speeds, cooldowns), TrafficSchedule (pure functions used by client+server), Remotes
+```
+- Security rule: **client never decides who got hit or what it owns** — client only asks, server decides.
+
+---
+
+## 7. Build order (milestones)
+1. Map greybox + chicken character + jump/glide.
+2. Traffic system (deterministic cars + server hit checks).
+3. Round state machine + Solo mode + lobby/spectate.
+4. Eggs (shoot, hit, knockback/elimination).
+5. Voting + Teams mode + 1–2 extra modes.
+6. Data saving, coins, shop, cosmetics.
+7. Polish: sounds, VFX, mobile controls, UI art.
+
+---
+
+## 8. Decisions
+| Question | Decision |
+|---|---|
+| What does an egg hit do? | **Knockback.** Eggs shove chickens (ideally into traffic). Only cars eliminate. |
+| Why cross the road in Solo? | **Shrinking sides.** Sidewalks/safe zones crumble over time, forcing players across. |
+| Workflow | **Rojo + this Git repo.** Code lives here, synced into Studio. |
+| Cosmetic economy | **Coins + Robux.** Earn coins by playing; sell coin packs + a few Robux-exclusive items. No paid random crates. |
+
+## 9. Still open
+- Max players per server (suggest 12–16).
+- Who makes the art (chicken rig, cars, map)? Free Toolbox/greybox first, or custom models?
+- Mobile support at launch? (Affects glide/shoot button UI.)
+- Which extra modes to build first (suggest Rush Hour + Road Rage).
