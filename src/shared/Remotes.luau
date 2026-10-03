@@ -1,0 +1,42 @@
+--!strict
+-- Every RemoteEvent the game uses. The server creates them; clients wait for them.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local NAMES = {
+	-- client -> server
+	"Vote", -- (modeId: string)
+	"ShootEgg", -- (direction: Vector3, localId: number)
+	"LaunchRageCar", -- (lane: number, dir: number)
+	-- server -> client
+	"EggFired", -- (eggId: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number)
+	"EggHit", -- (eggId: string, position: Vector3)
+	"Knockback", -- (velocity: Vector3)
+	"RageCar", -- (car: TrafficSchedule.Car)
+	"ChickenSplat", -- (userId: number, position: Vector3, velocity: Vector3)
+	"Feed", -- (text: string)
+	"WinEffect", -- (userIds: {number})
+}
+
+local folder: Instance
+if RunService:IsServer() then
+	local f = Instance.new("Folder")
+	f.Name = "Remotes"
+	for _, name in NAMES do
+		local remote = Instance.new("RemoteEvent")
+		remote.Name = name
+		remote.Parent = f
+	end
+	f.Parent = ReplicatedStorage
+	folder = f
+else
+	folder = ReplicatedStorage:WaitForChild("Remotes")
+end
+
+local Remotes = {}
+for _, name in NAMES do
+	Remotes[name] = folder:WaitForChild(name) :: RemoteEvent
+end
+
+return Remotes :: { [string]: RemoteEvent }

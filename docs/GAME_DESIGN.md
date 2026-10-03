@@ -147,8 +147,22 @@ src/
 | Workflow | **Rojo + this Git repo.** Code lives here, synced into Studio. |
 | Cosmetic economy | **Coins + Robux.** Earn coins by playing; sell coin packs + a few Robux-exclusive items. No paid random crates. |
 
-## 9. Still open
-- Max players per server (suggest 12–16).
-- Who makes the art (chicken rig, cars, map)? Free Toolbox/greybox first, or custom models?
-- Mobile support at launch? (Affects glide/shoot button UI.)
-- Which extra modes to build first (suggest Rush Hour + Road Rage).
+| Max players | **16** per server. |
+| Art | Made separately (another Claude chat) following [`ASSETS.md`](ASSETS.md); the game falls back to generated shapes. |
+| Mobile | **Supported at launch**: egg button, hold-jump to glide, on-screen driver controls. |
+| First extra modes | **Rush Hour** and **Road Rage**. |
+
+## 9. Build status
+
+| Milestone | Status |
+|---|---|
+| 1. Greybox map, jump + glide | ✅ built (map generated in code) |
+| 2. Deterministic traffic + server hit checks | ✅ built, schedule unit-tested |
+| 3. Round loop, Solo, lobby, spectate | ✅ built |
+| 4. Eggs with knockback | ✅ built |
+| 5. Voting, Teams, Rush Hour, Road Rage | ✅ built |
+| 6. Data saving, coins, shop, cosmetics | ⏳ next |
+| 7. Polish (sounds, VFX, UI art) | ⏳ waiting on art |
+
+Not yet play-tested in Studio: the code type-checks and builds with Rojo, but Roblox physics and
+feel (jump height, glide, car speed, knockback) need tuning in `src/shared/Config.luau`.
