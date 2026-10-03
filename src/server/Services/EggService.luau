@@ -11,11 +11,14 @@ local Config = require(Shared.Config)
 local EggPhysics = require(Shared.EggPhysics)
 local Remotes = require(Shared.Remotes)
 
+local DataService = require(script.Parent.DataService)
+
 local EggService = {}
 
 export type Rules = {
 	canShoot: (Player) -> boolean,
 	canHit: (shooter: Player, target: Player) -> boolean,
+	onHit: ((shooter: Player, target: Player) -> ())?,
 }
 
 type Egg = {
@@ -25,6 +28,7 @@ type Egg = {
 	velocity: Vector3,
 	t: number,
 	params: RaycastParams,
+	hitEffect: string,
 }
 
 local rules: Rules = {
@@ -81,13 +85,15 @@ local function onShoot(player: Player, direction: unknown, localId: unknown)
 		velocity = direction.Unit * Config.Egg.Speed,
 		t = 0,
 		params = params,
+		hitEffect = DataService.equipped(player, "HitEffect"),
 	}
 	table.insert(eggs, egg)
 
 	local firedAt = workspace:GetServerTimeNow()
+	local eggSkin = DataService.equipped(player, "EggSkin")
 	for _, other in Players:GetPlayers() do
 		if other ~= player then
-			Remotes.EggFired:FireClient(other, egg.id, player.UserId, egg.origin, egg.velocity, firedAt)
+			Remotes.EggFired:FireClient(other, egg.id, player.UserId, egg.origin, egg.velocity, firedAt, eggSkin)
 		end
 	end
 end
@@ -101,8 +107,11 @@ local function onEggHit(egg: Egg, result: RaycastResult)
 		local knockback = push * Config.Egg.KnockbackHorizontal + Vector3.new(0, Config.Egg.KnockbackUp, 0)
 		-- The target's client owns its character physics, so it applies the push itself.
 		Remotes.Knockback:FireClient(target, knockback)
+		if rules.onHit then
+			rules.onHit(egg.shooter, target)
+		end
 	end
-	Remotes.EggHit:FireAllClients(egg.id, result.Position)
+	Remotes.EggHit:FireAllClients(egg.id, result.Position, egg.hitEffect)
 end
 
 local function step(dt: number)

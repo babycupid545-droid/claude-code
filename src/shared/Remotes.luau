@@ -9,14 +9,20 @@ local NAMES = {
 	"Vote", -- (modeId: string)
 	"ShootEgg", -- (direction: Vector3, localId: number)
 	"LaunchRageCar", -- (lane: number, dir: number)
+	"BuyItem", -- (itemId: string) buy a cosmetic with coins
+	"EquipItem", -- (itemId: string) equip (emotes: toggle in/out of the emote wheel)
+	"Emote", -- (itemId: string)
 	-- server -> client
-	"EggFired", -- (eggId: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number)
-	"EggHit", -- (eggId: string, position: Vector3)
+	"EggFired", -- (eggId: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number, eggSkin: string)
+	"EggHit", -- (eggId: string, position: Vector3, hitEffect: string)
 	"Knockback", -- (velocity: Vector3)
 	"RageCar", -- (car: TrafficSchedule.Car)
 	"ChickenSplat", -- (userId: number, position: Vector3, velocity: Vector3)
 	"Feed", -- (text: string)
-	"WinEffect", -- (userIds: {number})
+	"WinEffect", -- (winners: { { userId: number, effect: string } })
+	"DataSync", -- (snapshot: DataSnapshot) the local player's saved data
+	"PlayEmote", -- (userId: number, itemId: string)
+	"Notify", -- (text: string) short toast, e.g. "+50 coins"
 }
 
 local folder: Instance

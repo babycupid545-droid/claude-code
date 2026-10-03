@@ -9,12 +9,12 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
-local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local EggPhysics = require(Shared.EggPhysics)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
 
+local ClientData = require(script.Parent.Parent.ClientData)
 local Effects = require(script.Parent.Parent.Effects)
 
 local EggController = {}
@@ -36,39 +36,6 @@ local lastShot = 0
 local nextLocalId = 0
 local bound = false
 
-local function makeEggModel(): Instance
-	local template = Assets.find("Eggs", "Default")
-	if template and (template:IsA("BasePart") or template:IsA("Model")) then
-		local clone = template:Clone()
-		for _, d in clone:GetDescendants() do
-			if d:IsA("BasePart") then
-				d.Anchored = true
-				d.CanCollide = false
-				d.CanQuery = false
-			end
-		end
-		if clone:IsA("BasePart") then
-			clone.Anchored = true
-			clone.CanCollide = false
-			clone.CanQuery = false
-		end
-		return clone
-	end
-	local part = Instance.new("Part")
-	part.Size = Vector3.new(1, 1, 1)
-	part.Color = Color3.fromRGB(255, 250, 235)
-	part.Material = Enum.Material.SmoothPlastic
-	part.Anchored = true
-	part.CanCollide = false
-	part.CanQuery = false
-	part.CanTouch = false
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Sphere
-	mesh.Scale = Vector3.new(1, 1, 1.35)
-	mesh.Parent = part
-	return part
-end
-
 local function placeEgg(egg: VisualEgg, position: Vector3)
 	local v = EggPhysics.velocityAt(egg.velocity, egg.t)
 	local cf = if v.Magnitude > 1e-3 then CFrame.lookAt(position, position + v) else CFrame.new(position)
@@ -80,7 +47,7 @@ local function placeEgg(egg: VisualEgg, position: Vector3)
 	end
 end
 
-local function spawnVisual(id: string, shooter: Model?, origin: Vector3, velocity: Vector3, startT: number)
+local function spawnVisual(id: string, shooter: Model?, origin: Vector3, velocity: Vector3, startT: number, skin: string?)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local exclude: { Instance } = { folder }
@@ -94,7 +61,7 @@ local function spawnVisual(id: string, shooter: Model?, origin: Vector3, velocit
 	params.FilterDescendantsInstances = exclude
 
 	local egg: VisualEgg = {
-		model = makeEggModel(),
+		model = Effects.makeEgg(skin),
 		origin = origin,
 		velocity = velocity,
 		t = math.max(0, startT),
@@ -149,7 +116,14 @@ local function shoot()
 	nextLocalId += 1
 	local origin = EggPhysics.buttOrigin(root)
 	local direction = aimDirection(origin, character)
-	spawnVisual(`{player.UserId}:{nextLocalId}`, character, origin, direction * Config.Egg.Speed, 0)
+	spawnVisual(
+		`{player.UserId}:{nextLocalId}`,
+		character,
+		origin,
+		direction * Config.Egg.Speed,
+		0,
+		ClientData.equipped("EggSkin")
+	)
 	Remotes.ShootEgg:FireServer(direction, nextLocalId)
 end
 
@@ -206,15 +180,15 @@ function EggController.start()
 	folder.Parent = workspace
 
 	Remotes.EggFired.OnClientEvent:Connect(
-		function(id: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number)
+		function(id: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number, skin: string)
 			local shooter = Players:GetPlayerByUserId(shooterUserId)
 			local elapsed = workspace:GetServerTimeNow() - firedAt
-			spawnVisual(id, shooter and shooter.Character, origin, velocity, elapsed)
+			spawnVisual(id, shooter and shooter.Character, origin, velocity, elapsed, skin)
 		end
 	)
-	Remotes.EggHit.OnClientEvent:Connect(function(id: string, position: Vector3)
+	Remotes.EggHit.OnClientEvent:Connect(function(id: string, position: Vector3, hitEffect: string)
 		removeEgg(id)
-		Effects.eggHit(position)
+		Effects.eggHit(position, hitEffect)
 	end)
 
 	player:GetAttributeChangedSignal("Alive"):Connect(refreshBinding)

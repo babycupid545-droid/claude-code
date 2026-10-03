@@ -161,8 +161,14 @@ src/
 | 3. Round loop, Solo, lobby, spectate | ✅ built |
 | 4. Eggs with knockback | ✅ built |
 | 5. Voting, Teams, Rush Hour, Road Rage | ✅ built |
-| 6. Data saving, coins, shop, cosmetics | ⏳ next |
+| 6. Data saving, coins, shop, cosmetics | ✅ built (ProfileStore, Robux products, VIP, 5 cosmetic slots) |
 | 7. Polish (sounds, VFX, UI art) | ⏳ waiting on art |
+
+### Economy (built)
+Coins per round: 10 for playing, 5 per 30 s survived, 15 per knockout (egging someone who dies
+within 4 s), 50 for a Solo win / 30 each for a team win. VIP doubles round rewards.
+Shop prices run from 200 (common) to 8000 (legendary); one exclusive per slot is Robux-only.
+All numbers are in `Config.Rewards` and `src/shared/Cosmetics.luau`.
 
 Not yet play-tested in Studio: the code type-checks and builds with Rojo, but Roblox physics and
 feel (jump height, glide, car speed, knockback) need tuning in `src/shared/Config.luau`.

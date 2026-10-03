@@ -15,29 +15,48 @@ ReplicatedStorage
 └── Assets                (Folder)
     ├── Cars              (Folder)  any number of car Models, any names
     │   └── RageCar       (Model)   optional: the Road Rage driver's car
-    ├── Eggs              (Folder)
-    │   └── Default       (Part or Model) the egg projectile
+    ├── Chickens          (Folder)  chicken skin rigs, named by skin id (see list below)
+    ├── EggSkins          (Folder)  egg projectiles (Part or Model), named by egg skin id
+    ├── HitEffects        (Folder)  egg hit effects, named by hit effect id
+    ├── WinEffects        (Folder)  winner celebrations, named by win effect id
+    ├── Emotes            (Folder)  Animation objects, named by emote id
     ├── Animations        (Folder)
     │   └── Glide         (Animation) played while gliding
-    ├── Effects           (Folder)  each is a ParticleEmitter, or an Attachment/Folder holding several
-    │   ├── EggHit        egg splat
-    │   ├── Feathers      chicken squashed by a car
-    │   └── Win           winner celebration
-    └── Sounds            (Folder)  Sounds named like the effects (EggHit, Feathers, Win)
+    ├── Effects           (Folder)
+    │   └── Feathers      chicken squashed by a car
+    └── Sounds            (Folder)  Sounds named EggHit, Feathers, Win
 ServerStorage
 └── Assets                (Folder)
     ├── ArenaDecor        (Model/Folder) trees, buildings, street lamps around the road
     └── LobbyDecor        (Model/Folder) decoration inside the lobby
 ```
 
+## Cosmetic ids
+
+The full list (names, prices, rarities) is in `src/shared/Cosmetics.luau`. Art must be named
+with the **id**:
+
+| Slot | Folder | Ids |
+|---|---|---|
+| Chicken skin | `Chickens` | Classic, BrownHen, Bantam, Midnight, RubberDuck, Golden, Robo, Rainbow |
+| Egg skin | `EggSkins` | ClassicEgg, BrownEgg, SpeckledEgg, EasterEgg, RottenEgg, GoldenEgg, FireballEgg, DiamondEgg |
+| Hit effect | `HitEffects` | Splat, FeatherPuff, ConfettiPop, Sparkle, Boom, LoveTap |
+| Win effect | `WinEffects` | Confetti, GoldenRain, Fireworks, Pillar, Supernova |
+| Emote | `Emotes` | Bawk, Spin, Hop, LayEgg, Dance, Flex |
+
+Anything missing uses a generated stand-in: chickens get a chubby body in the skin's colours
+with a beak, comb and tail; eggs are coloured ellipsoids; effects are coloured particles;
+emotes are text bubbles, spins and hops.
+
 ## Sizes and rules
 
 | Asset | Size (studs) | Rules |
 |---|---|---|
 | Car | 8 wide × 6 tall × 14 long | Model **pivot at the center** of the car, **front facing -Z** (the pivot's LookVector). Anchoring/collision are handled by the game. Bright colours read best at speed. |
+| Chicken rig | about 4 tall | A full character Model: `Humanoid`, `HumanoidRootPart`, and an `Animate` LocalScript (copy one from a default character in Play mode). R15 recommended. Keep it under ~4.5 studs tall so jumping over cars still works. |
 | Egg | about 1 × 1 × 1.35 | Long axis along Z. |
-| Glide animation | — | R15, looping, wings out. Must be owned by the game's owner (or group) to play. |
-| Effects | — | Emitters should have `Enabled = false`; the game calls `:Emit()` on them. |
+| Hit / win effect | — | A ParticleEmitter, or a Folder/Attachment holding several. Emitters with `Enabled = false` are burst once (`EmitCount` attribute, default 30); enabled ones run for the `Duration` attribute (default 3s). |
+| Emote / Glide animation | — | R15, must be owned by the game's owner (or group) to play. Emotes play once; Glide loops. |
 
 ## Map coordinates (for ArenaDecor)
 
@@ -48,9 +67,3 @@ ServerStorage
 - Tunnels at **X = ±120 … ±126** where cars come out.
 - Lobby balcony centered at **(0, 70, -150)**, 90 × 50, looking down at the road.
 - Decor should be **Anchored**, and set `CanCollide = false` on anything chickens shouldn't stand on.
-
-## Coming later (cosmetics milestone)
-
-Chicken skins (a full rig per skin), egg skins, hit effects, win effects and emotes will use
-`Assets/Chickens`, `Assets/EggSkins`, `Assets/HitEffects`, `Assets/WinEffects`, `Assets/Emotes`.
-The exact format will be added here when that milestone is built.

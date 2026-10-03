@@ -104,4 +104,39 @@ Config.RoadRage = {
 	LaunchDelay = 0.6,
 }
 
+Config.Rewards = {
+	Participate = 10,
+	SurviveEvery = 30, -- seconds alive per survival bonus
+	SurviveCoins = 5,
+	Knockout = 15, -- egging someone shortly before they die
+	KnockoutWindow = 4,
+	Win = 50,
+	TeamWin = 30,
+}
+
+Config.Emotes = {
+	MaxEquipped = 4,
+	Cooldown = 2,
+}
+
+-- Robux. Create these in the Creator Dashboard (Monetization > Developer Products / Passes)
+-- and paste the ids here. Anything left at 0 is shown as "coming soon" and can't be bought.
+Config.Monetization = {
+	VipGamePassId = 0,
+	VipCoinMultiplier = 2,
+	CoinPacks = {
+		{ productId = 0, coins = 500, name = "Handful of Coins" },
+		{ productId = 0, coins = 1500, name = "Bucket of Coins" },
+		{ productId = 0, coins = 5000, name = "Barn of Coins" },
+	},
+	-- Robux-only cosmetics: item id -> developer product id.
+	ItemProducts = {
+		Rainbow = 0,
+		DiamondEgg = 0,
+		LoveTap = 0,
+		Supernova = 0,
+		Flex = 0,
+	} :: { [string]: number },
+}
+
 return Config

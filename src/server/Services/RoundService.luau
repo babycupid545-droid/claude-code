@@ -16,6 +16,7 @@ local TrafficSchedule = require(Shared.TrafficSchedule)
 
 local Services = script.Parent
 local ChickenService = require(Services.ChickenService)
+local DataService = require(Services.DataService)
 local EggService = require(Services.EggService)
 local MapBuilder = require(Services.MapBuilder)
 local SidewalkService = require(Services.SidewalkService)
@@ -32,6 +33,10 @@ type Round = {
 	team: { [Player]: Side },
 	connections: { RBXScriptConnection },
 	lastRageLaunch: { [Player]: number },
+	-- Who last egged each chicken, for knockout credit.
+	lastEgged: { [Player]: { shooter: Player, at: number } },
+	-- Server time the round went live (after the countdown).
+	startedAt: number?,
 	ended: boolean,
 }
 
@@ -169,13 +174,34 @@ local function checkWinner(r: Round): (boolean, { Player }, string?)
 	return false, {}, nil
 end
 
+local function survivalReward(r: Round, player: Player)
+	local startedAt = r.startedAt
+	if not startedAt or not player.Parent then
+		return
+	end
+	local R = Config.Rewards
+	local coins = math.floor((now() - startedAt) / R.SurviveEvery) * R.SurviveCoins
+	DataService.reward(player, coins, "for surviving")
+end
+
 local function eliminate(r: Round, player: Player, reason: string)
 	if not r.alive[player] then
 		return
 	end
 	r.alive[player] = false
 	player:SetAttribute("Alive", false)
-	feed(`{player.DisplayName} {reason}`)
+
+	-- Credit whoever egged this chicken just before it died.
+	local egged = r.lastEgged[player]
+	local shooter = egged and egged.shooter
+	if egged and shooter and shooter.Parent and os.clock() - egged.at <= Config.Rewards.KnockoutWindow then
+		feed(`{shooter.DisplayName} egged {player.DisplayName} to their doom!`)
+		DataService.addStat(shooter, "Knockouts", 1)
+		DataService.reward(shooter, Config.Rewards.Knockout, "knockout")
+	else
+		feed(`{player.DisplayName} {reason}`)
+	end
+	survivalReward(r, player)
 	if r.mode.roadRage and player.Parent then
 		player:SetAttribute("Driver", true)
 		Remotes.Feed:FireClient(player, "You're a driver now. Run them over!")
@@ -277,6 +303,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 		team = {},
 		connections = {},
 		lastRageLaunch = {},
+		lastEgged = {},
 		ended = false,
 	}
 	round = r
@@ -335,6 +362,9 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 			end
 			return not mode.teams or r.team[shooter] ~= r.team[target]
 		end,
+		onHit = function(shooter, target)
+			r.lastEgged[target] = { shooter = shooter, at = os.clock() }
+		end,
 	})
 
 	-- Traffic starts with the countdown so the road is already busy when the round begins.
@@ -363,6 +393,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	end
 
 	local roundStart = now()
+	r.startedAt = roundStart
 	setState("InRound", Config.Timing.RoundTimeLimit)
 	task.spawn(runSidewalkEvents, r, roundStart)
 
@@ -425,12 +456,31 @@ local function cleanupRound(r: Round)
 			untyped.Team = nil
 			-- Survivors go back to the lobby.
 			if r.alive[player] then
-				task.spawn(player.LoadCharacterAsync, player)
+				task.spawn(ChickenService.spawn, player)
 			end
 		end
 	end
 	round = nil
 	RoundState:SetAttribute("ModeId", "")
+end
+
+local function giveRoundRewards(r: Round, winners: { Player })
+	local R = Config.Rewards
+	for _, player in r.participants do
+		if player.Parent then
+			DataService.addStat(player, "Rounds", 1)
+			DataService.reward(player, R.Participate, "for playing")
+			if r.alive[player] then
+				survivalReward(r, player)
+			end
+		end
+	end
+	for _, player in winners do
+		if player.Parent then
+			DataService.addStat(player, "Wins", 1)
+			DataService.reward(player, if r.mode.teams then R.TeamWin else R.Win, "for winning!")
+		end
+	end
 end
 
 local function waitForPlayers()
@@ -481,11 +531,14 @@ function RoundService.init()
 					end
 				end
 			end
-			local userIds = {}
+			local celebrations = {}
 			for _, player in winners :: { Player } do
-				table.insert(userIds, player.UserId)
+				table.insert(celebrations, { userId = player.UserId, effect = DataService.equipped(player, "WinEffect") })
 			end
-			Remotes.WinEffect:FireAllClients(userIds)
+			Remotes.WinEffect:FireAllClients(celebrations)
+			if ok and round then
+				giveRoundRewards(round, winners :: { Player })
+			end
 			setState("Results", Config.Timing.ResultsDuration, message :: string)
 			task.wait(Config.Timing.ResultsDuration)
 			if round then

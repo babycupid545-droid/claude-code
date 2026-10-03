@@ -20,6 +20,18 @@ The code lives in this repo and is synced into Studio with [Rojo](https://rojo.s
    To test multiplayer modes (Teams, Road Rage) use **Test → Clients and Servers** with 2+ players.
 6. Save the place, then publish it. In **Game Settings → Places**, set **Max Players to 16**.
 
+## Saving data and Robux
+
+- Player data (coins, cosmetics, stats) saves with ProfileStore (`src/server/Packages`).
+  To save in Studio, turn on **Game Settings → Security → Enable Studio Access to API
+  Services**; otherwise Studio uses temporary data that resets each test.
+- To sell things for Robux, create them in the Creator Dashboard under **Monetization**, then
+  paste the ids into `Config.Monetization` in `src/shared/Config.luau`:
+  - 3 **Developer Products** for the coin packs (500 / 1500 / 5000 coins),
+  - 5 **Developer Products** for the Robux-only items (Rainbow, DiamondEgg, LoveTap, Supernova, Flex),
+  - 1 **Game Pass** for VIP (double coins).
+  Anything left at `0` shows as "Coming soon" in the shop.
+
 ## Controls
 
 | Action | PC | Gamepad | Phone |
@@ -27,6 +39,7 @@ The code lives in this repo and is synced into Studio with [Rojo](https://rojo.s
 | Jump / glide | Space (hold while falling) | A (hold) | Jump button (hold) |
 | Shoot egg | Left click or E (aims at the mouse) | R2 | 🥚 button (aims where the camera looks) |
 | Road Rage driver | W/S pick lane, A/D send car | D-pad, X/B | On-screen buttons |
+| Emotes | 1–4, or the Emotes button | Emotes button | Emotes button |
 
 ## Project layout
 
