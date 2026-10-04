@@ -16,8 +16,10 @@ local function params(seed: number): TrafficSchedule.Params
 	return {
 		seed = seed,
 		startTime = 1000,
-		laneCount = 6,
-		laneWidth = 14,
+		lanes = {
+			{ z = -64, dir = 1 }, { z = -50, dir = 1 }, { z = -36, dir = 1 }, { z = -22, dir = 1 },
+			{ z = 22, dir = -1 }, { z = 36, dir = -1 }, { z = 50, dir = -1 }, { z = 64, dir = -1 },
+		},
 		roadLength = 240,
 		carLength = 14,
 		baseSpeed = 120,
@@ -94,7 +96,7 @@ do
 	check("standing in a car's path is a hit", hit ~= nil)
 	local overhead = s:findHit({ x = x, z = z, feetY = 8, radius = 1 }, 1010, 0, 8, 6, 0.75)
 	check("flying over a car is safe", overhead == nil)
-	local sidewalk = s:findHit({ x = x, z = 60, feetY = 0, radius = 1 }, 1010, 0, 8, 6, 0.75)
+	local sidewalk = s:findHit({ x = x, z = 90, feetY = 0, radius = 1 }, 1010, 0, 8, 6, 0.75)
 	check("sidewalk is safe", sidewalk == nil)
 end
 
@@ -131,6 +133,32 @@ do
 		end
 	end
 	check("rage car is active", car ~= nil)
+end
+
+-- Special vehicles use their own z and size (the median harvester).
+do
+	local s = TrafficSchedule.new(params(11))
+	s:addCar({ id = "h:1", lane = 0, dir = 1, speed = 50, spawnTime = 1000, kind = 0, z = 0, length = 20, width = 22, height = 9, vehicle = "Harvester" })
+	s:update(1002)
+	local x = s:carX(s.cars[#s.cars], 1002)
+	for _, c in s.cars do
+		if c.id == "h:1" then
+			x = s:carX(c, 1002)
+		end
+	end
+	check("harvester hits on the median", s:findHit({ x = x, z = 8, feetY = 0, radius = 1 }, 1002, 0, 8, 6, 0.75) ~= nil)
+	check("harvester is tall", s:findHit({ x = x, z = 0, feetY = 7, radius = 1 }, 1002, 0, 8, 6, 0.75) ~= nil)
+end
+
+-- Event windows speed traffic up only while they last.
+do
+	local p = params(4)
+	p.suddenDeathAt = nil
+	p.windows = { { start = 30, stop = 50, speed = 1.6, density = 1.3 } }
+	local s = TrafficSchedule.new(p)
+	check("window off before", s:multipliers(1000 + 29) == 1)
+	check("window on during", s:multipliers(1000 + 40) == 1.6)
+	check("window off after", s:multipliers(1000 + 51) == 1)
 end
 
 if failures > 0 then

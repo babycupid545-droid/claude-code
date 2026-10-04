@@ -22,6 +22,9 @@ local NAMES = {
 	"WinEffect", -- (winners: { { userId: number, effect: string } })
 	"DataSync", -- (snapshot: DataSnapshot) the local player's saved data
 	"PlayEmote", -- (userId: number, itemId: string)
+	"Sprinkler", -- (index: number, phase: "warn" | "burst")
+	"EggPickup", -- (position: Vector3, userId: number) a golden egg was collected
+	"EggShot", -- (userId: number) someone fired an egg (for the shooting animation)
 	"Notify", -- (text: string, kind: "coin" | "error" | "unlock" | "knockout" | "info", amount: number)
 }
 

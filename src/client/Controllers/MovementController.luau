@@ -11,6 +11,7 @@ local Shared = ReplicatedStorage.Shared
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
+local RoundState = require(Shared.RoundState)
 
 local CameraFx = require(script.Parent.Parent.CameraFx)
 local Effects = require(script.Parent.Parent.Effects)
@@ -100,7 +101,10 @@ local function step(dt: number)
 	local velocity = r.AssemblyLinearVelocity
 	if velocity.Y < 0 and stamina > 0 and jumpHeld(h) then
 		setGliding(true)
-		stamina = math.max(0, stamina - dt)
+		-- Feather Frenzy event: unlimited glide.
+		if RoundState:GetAttribute("Event") ~= "FeatherFrenzy" then
+			stamina = math.max(0, stamina - dt)
+		end
 		local move = h.MoveDirection
 		local horizontal = if move.Magnitude > 0.1
 			then move.Unit * C.GlideHorizontalSpeed

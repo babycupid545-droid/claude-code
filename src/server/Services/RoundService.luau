@@ -9,6 +9,7 @@ local Teams = game:GetService("Teams")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
+local Layout = require(Shared.Layout)
 local Modes = require(Shared.Modes)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
@@ -18,6 +19,8 @@ local Services = script.Parent
 local ChickenService = require(Services.ChickenService)
 local DataService = require(Services.DataService)
 local EggService = require(Services.EggService)
+local EventService = require(Services.EventService)
+local HazardService = require(Services.HazardService)
 local MapBuilder = require(Services.MapBuilder)
 local SidewalkService = require(Services.SidewalkService)
 local TrafficService = require(Services.TrafficService)
@@ -212,7 +215,7 @@ end
 
 -- Road Rage -----------------------------------------------------------------------------
 
-local function onLaunchRageCar(player: Player, lane: unknown, dir: unknown)
+local function onLaunchRageCar(player: Player, lane: unknown)
 	local r = round
 	if not r or not r.mode.roadRage or RoundState:GetAttribute("State") ~= "InRound" then
 		return
@@ -220,10 +223,10 @@ local function onLaunchRageCar(player: Player, lane: unknown, dir: unknown)
 	if player:GetAttribute("Driver") ~= true then
 		return
 	end
-	if type(lane) ~= "number" or type(dir) ~= "number" then
+	if type(lane) ~= "number" then
 		return
 	end
-	if lane ~= math.floor(lane) or lane < 1 or lane > Config.Map.LaneCount or (dir ~= 1 and dir ~= -1) then
+	if lane ~= math.floor(lane) or lane < 1 or lane > #Layout.lanes then
 		return
 	end
 	local t = os.clock()
@@ -231,53 +234,44 @@ local function onLaunchRageCar(player: Player, lane: unknown, dir: unknown)
 		return
 	end
 	r.lastRageLaunch[player] = t
-	TrafficService.launchRageCar(player, lane, dir)
+	TrafficService.launchRageCar(player, lane)
 end
 
--- Sidewalk events -----------------------------------------------------------------------
+-- Crossing ---------------------------------------------------------------------------------
 
-local function busiestSide(r: Round): Side
-	local counts: { [Side]: number } = { A = 0, B = 0 }
-	for _, player in aliveList(r) do
-		local root = ChickenService.getRoot(player)
-		local side = root and SidewalkService.sideOf(root.Position.Z)
-		if side then
-			counts[side] += 1
-		end
-	end
-	if counts.A == counts.B then
-		return if rng:NextNumber() < 0.5 then "A" else "B"
-	end
-	return if counts.A > counts.B then "A" else "B"
-end
-
-local function runSidewalkEvents(r: Round, roundStart: number)
-	local S = Config.Sidewalk
-	if r.mode.sidewalks == "Shrink" then
-		while not r.ended do
-			task.wait(S.ShrinkInterval)
-			if r.ended then
-				return
-			end
-			if SidewalkService.shrink(S.ShrinkWarning, S.MinRows) then
-				feed("The sidewalks are crumbling!", "lightning")
-			end
-		end
-		return
-	end
-
-	task.wait(math.max(0, roundStart + S.FirstCollapseAt - now()))
-	local rest = S.CollapseRest
+-- Everyone starts on side A. They must reach the other side before the one they left
+-- crumbles; it rises again a few seconds later and they must cross back. Each phase is shorter.
+local function runCrossing(r: Round, roundStart: number)
+	local S = Config.Shuttle
+	local leaving: Side = "A"
+	local phase = S.FirstPhase
+	local deadline = roundStart + phase
 	while not r.ended do
-		-- Drop the side with the most chickens on it, so nobody can camp.
-		local side = busiestSide(r)
-		feed(`Sidewalk {side} is collapsing! Cross the road!`, "lightning")
-		SidewalkService.collapseSide(side, S.CollapseWarning, S.CollapseDuration)
+		local target: Side = if leaving == "A" then "B" else "A"
+		RoundState:SetAttribute("CrossTarget", target)
+		RoundState:SetAttribute("CrossDeadline", deadline)
+		feed(`Run to the {Layout.sideName(target)} side!`, "arrowRight")
+
+		task.wait(math.max(0, deadline - S.Warning - now()))
 		if r.ended then
 			return
 		end
-		task.wait(rest)
-		rest = math.max(S.CollapseRestMin, rest - S.CollapseRestStep)
+		SidewalkService.warnSide(leaving)
+		task.wait(math.max(0, deadline - now()))
+		if r.ended then
+			return
+		end
+		SidewalkService.dropSide(leaving)
+
+		-- The next deadline counts from this drop.
+		phase = math.max(S.MinPhase, phase - S.PhaseStep)
+		deadline = now() + phase
+		task.wait(S.RiseDelay)
+		if r.ended then
+			return
+		end
+		SidewalkService.raiseSide(leaving)
+		leaving = target
 	end
 end
 
@@ -295,7 +289,7 @@ local function playersWithCharacters(): { Player }
 end
 
 local function runRound(mode: Modes.Mode): ({ Player }, string)
-	SidewalkService.reset(arena, Config.Map.LaneCount * Config.Map.LaneWidth / 2)
+	SidewalkService.reset(arena)
 	EggService.clear()
 	RoundState:SetAttribute("SuddenDeath", false)
 
@@ -319,9 +313,8 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	end
 	for i, player in shuffled do
-		local side: Side = if mode.teams
-			then (if i % 2 == 1 then "A" else "B")
-			else (if rng:NextNumber() < 0.5 then "A" else "B")
+		-- Everyone starts on side A (in Teams, Blue starts across the road on B).
+		local side: Side = if mode.teams and i % 2 == 0 then "B" else "A"
 		r.team[player] = side
 		if mode.teams then
 			player.Team = teamObjects[side]
@@ -373,10 +366,20 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	-- Traffic starts with the countdown so the road is already busy when the round begins.
 	local trafficStart = math.floor(now())
 	local countdown = Config.Timing.CountdownDuration
+	local events = EventService.plan(Config.Timing.RoundTimeLimit)
+	local hazardContext: HazardService.Context = {
+		getChickens = function()
+			return aliveList(r)
+		end,
+		isAlive = function(player)
+			return r.alive[player] == true
+		end,
+	}
 	TrafficService.start({
 		rushHour = mode.rushHour,
 		startTime = trafficStart,
 		suddenDeathAt = countdown + Config.Timing.SuddenDeathAt,
+		windows = EventService.trafficWindows(events, countdown),
 		getChickens = function()
 			return aliveList(r)
 		end,
@@ -384,7 +387,14 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 			if not r.alive[player] or RoundState:GetAttribute("State") ~= "InRound" then
 				return
 			end
-			eliminate(r, player, "got flattened by a car", "car")
+			if car.vehicle == "Harvester" then
+				eliminate(r, player, "got harvested", "car")
+			elseif car.driver then
+				local driver = Players:GetPlayerByUserId(car.driver)
+				eliminate(r, player, `got run over by {if driver then driver.DisplayName else "a driver"}`, "angry")
+			else
+				eliminate(r, player, "got flattened by a car", "car")
+			end
 			ChickenService.squash(player, Vector3.new(car.dir * car.speed, 0, 0))
 		end,
 	})
@@ -398,7 +408,9 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	local roundStart = now()
 	r.startedAt = roundStart
 	setState("InRound", Config.Timing.RoundTimeLimit)
-	task.spawn(runSidewalkEvents, r, roundStart)
+	task.spawn(runCrossing, r, roundStart)
+	HazardService.start(arena, hazardContext)
+	EventService.run(events, roundStart, hazardContext)
 
 	local suddenDeathAnnounced = false
 	local winners: { Player } = {}
@@ -435,6 +447,11 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 
 	r.ended = true
 	RoundState:SetAttribute("SuddenDeath", false)
+	RoundState:SetAttribute("CrossTarget", "")
+	RoundState:SetAttribute("CrossDeadline", 0)
+	HazardService.stop()
+	EventService.stop()
+	SidewalkService.reset(arena)
 	TrafficService.stop()
 	EggService.setRules({
 		canShoot = function()
@@ -497,7 +514,7 @@ end
 
 function RoundService.init()
 	arena = MapBuilder.prepare()
-	SidewalkService.reset(arena, Config.Map.LaneCount * Config.Map.LaneWidth / 2)
+	SidewalkService.reset(arena)
 
 	local function makeTeam(side: Side, name: string, color: BrickColor)
 		local team = Instance.new("Team")
@@ -528,6 +545,8 @@ function RoundService.init()
 				warn("Round failed:", winners)
 				winners, message = {}, "Round cancelled"
 				TrafficService.stop()
+				HazardService.stop()
+				EventService.stop()
 				if round then
 					round.ended = true
 					for _, c in round.connections do

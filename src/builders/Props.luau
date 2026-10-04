@@ -95,6 +95,38 @@ function Props.flowers(parent: Instance, cf: CFrame, spread: number, count: numb
 	end
 end
 
+function Props.grassTuft(parent: Instance, cf: CFrame)
+	for i = 1, 3 do
+		Build.wedge({
+			Name = "Tuft",
+			Size = Vector3.new(0.3, 1.2 + rng():NextNumber() * 0.6, 0.8),
+			CFrame = cf * CFrame.Angles(0, rng():NextNumber(0, math.pi * 2), rng():NextNumber(-0.3, 0.3)) * CFrame.new(0, 0.6, 0),
+			Color = Build.vary(if i == 2 then Palette.GrassDark else Palette.Grass, 0.04),
+			Parent = parent,
+		})
+	end
+end
+
+-- Big red barn doors standing open at the end of the median, `width` wide.
+function Props.barnGate(parent: Instance, base: CFrame, width: number): Model
+	local m = Build.model("BarnGate", parent)
+	local h = 14
+	for _, side in { -1, 1 } do
+		Build.part({ Size = Vector3.new(2, h, 2), CFrame = base * CFrame.new(side * width / 2, h / 2, 0), Color = Palette.BarnRed, Parent = m })
+		-- Open doors swung back.
+		local door = Build.part({
+			Size = Vector3.new(width / 2, h - 2, 0.6),
+			CFrame = base * CFrame.new(side * (width / 2 + 0.5), (h - 2) / 2, 0) * CFrame.Angles(0, side * math.rad(-70), 0) * CFrame.new(side * width / 4, 0, 0),
+			Color = Palette.BarnRed,
+			Parent = m,
+		})
+		Build.part({ Size = Vector3.new(width / 2, 0.5, 0.7), CFrame = door.CFrame, Color = Palette.Trim, Parent = m })
+	end
+	Build.part({ Size = Vector3.new(width + 4, 2.4, 2.4), CFrame = base * CFrame.new(0, h + 1, 0), Color = Palette.Trim, Parent = m })
+	Build.wedge({ Size = Vector3.new(width + 6, 5, 3), CFrame = base * CFrame.new(0, h + 4.7, 0), Color = Palette.Roof, Parent = m })
+	return m
+end
+
 function Props.hayBale(parent: Instance, cf: CFrame, round: boolean?): Model
 	local m = Build.model("HayBale", parent)
 	if round then

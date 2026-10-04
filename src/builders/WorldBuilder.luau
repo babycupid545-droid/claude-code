@@ -1,12 +1,14 @@
 --!strict
 -- Builds the playable arena and the lobby as real Studio objects.
 --
--- The arena is a floating island in the sky: a six-lane road between two tiled sidewalks,
+-- The arena is a floating island in the sky: two four-lane roads with a grass median between
+-- them and tiled sidewalks on both sides,
 -- rocky tunnels at both ends, and farm islands drifting around it. Falling off the island
 -- (or through a collapsed sidewalk) drops you into the clouds.
 --
 -- Gameplay pieces the scripts rely on (names matter):
 --   Workspace.Arena.Road.Lane1..N     drivable lanes
+--   Workspace.Arena.Median            grass median; parts with a Sprinkler attribute are sprinklers
 --   Workspace.Arena.Sidewalks.*       tiles with attributes Side ("A"/"B"), Row, Col
 --   Workspace.Arena.Walls             invisible walls at the road ends
 --   Workspace.Lobby.LobbySpawn        where everyone spawns
@@ -20,84 +22,141 @@ local Props = require(script.Parent.Props)
 
 local WorldBuilder = {}
 
+local Layout = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Layout"))
+
 local M = Config.Map
-local ROAD_DEPTH = M.LaneCount * M.LaneWidth
-local HALF_L = M.RoadLength / 2
-local HALF_D = ROAD_DEPTH / 2
-local OUTER_Z = HALF_D + M.SidewalkDepth
+local HALF_L = Layout.halfLength
+local INNER = Layout.innerEdge
+local OUTER_Z = Layout.outerEdge
+local MEDIAN = Layout.medianHalf
 local TILE_X = M.RoadLength / M.SidewalkColumns
 local TILE_Z = M.SidewalkDepth / M.SidewalkRows
 local TILE_THICKNESS = 3
+local ROAD_EXTRA = 70 -- road continues this far into the tunnels
 
 -- Gameplay geometry ------------------------------------------------------------------------
 
-local function buildRoad(arena: Model)
+local function line(parent: Instance, name: string, size: Vector3, pos: Vector3, color: Color3): Part
+	return Build.part({
+		Name = name,
+		Size = size,
+		Position = pos,
+		Color = color,
+		CanCollide = false,
+		CanQuery = false,
+		CastShadow = false,
+		Parent = parent,
+	})
+end
+
+local function buildRoads(arena: Model)
 	local road = Build.folder("Road", arena)
-	for i = 1, M.LaneCount do
-		local z = -HALF_D + (i - 0.5) * M.LaneWidth
+	local lines = Build.folder("Lines", road)
+	local length = M.RoadLength + ROAD_EXTRA * 2
+	for i, lane in Layout.lanes do
 		Build.part({
 			Name = `Lane{i}`,
-			Size = Vector3.new(M.RoadLength + 40, 4, M.LaneWidth),
-			Position = Vector3.new(0, M.RoadTopY - 2, z),
-			Color = if i % 2 == 0 then Palette.Asphalt else Palette.AsphaltDark:Lerp(Palette.Asphalt, 0.6),
+			Size = Vector3.new(length, 4, M.LaneWidth),
+			Position = Vector3.new(0, M.RoadTopY - 2, lane.z),
+			Color = if i % 2 == 0 then Palette.Asphalt else Palette.AsphaltDark:Lerp(Palette.Asphalt, 0.55),
 			Material = Enum.Material.SmoothPlastic,
 			Parent = road,
 		})
 	end
-
-	local lines = Build.folder("Lines", road)
-	for i = 1, M.LaneCount - 1 do
-		local z = -HALF_D + i * M.LaneWidth
-		if i == M.LaneCount / 2 then
-			for _, off in { -0.5, 0.5 } do
-				Build.part({
-					Name = "CenterLine",
-					Size = Vector3.new(M.RoadLength + 40, 0.06, 0.45),
-					Position = Vector3.new(0, M.RoadTopY + 0.03, z + off),
-					Color = Palette.CenterLine,
-					CanCollide = false,
-					CanQuery = false,
-					Parent = lines,
-				})
+	local y = M.RoadTopY + 0.03
+	for _, sign in { -1, 1 } do
+		local nearEdge = sign * MEDIAN
+		local farEdge = sign * INNER
+		-- Solid yellow line along the median, solid white along the sidewalk.
+		line(lines, "EdgeYellow", Vector3.new(length, 0.06, 0.5), Vector3.new(0, y, nearEdge + sign * 1), Palette.CenterLine)
+		line(lines, "EdgeWhite", Vector3.new(length, 0.06, 0.5), Vector3.new(0, y, farEdge - sign * 1), Palette.LaneLine)
+		-- Dashed lines between this road's lanes.
+		for k = 1, M.LanesPerRoad - 1 do
+			local z = sign * (MEDIAN + k * M.LaneWidth)
+			for x = -HALF_L - ROAD_EXTRA, HALF_L + ROAD_EXTRA, 16 do
+				line(lines, "Dash", Vector3.new(8, 0.06, 0.45), Vector3.new(x, y, z), Palette.LaneLine)
 			end
-		else
-			for x = -HALF_L - 16, HALF_L + 16, 16 do
-				Build.part({
-					Name = "Dash",
-					Size = Vector3.new(8, 0.06, 0.5),
-					Position = Vector3.new(x, M.RoadTopY + 0.03, z),
-					Color = Palette.LaneLine,
-					CanCollide = false,
-					CanQuery = false,
-					Parent = lines,
-				})
+		end
+		-- Zebra crossing.
+		for z = MEDIAN + 3, INNER - 3, 4.5 do
+			line(lines, "Zebra", Vector3.new(16, 0.07, 2.4), Vector3.new(0, y + 0.005, sign * z), Palette.LaneLine)
+		end
+		-- Chevrons painted on each lane, pointing the way traffic drives.
+		for _, lane in Layout.lanes do
+			if math.sign(lane.z) == sign then
+				for _, x in { -110, -30, 50, 130 } do
+					for _, arm in { -1, 1 } do
+						local chevron = line(lines, "Chevron", Vector3.new(4.5, 0.06, 0.7), Vector3.zero, Palette.LaneLine)
+						chevron.CFrame = CFrame.new(x, y + 0.01, lane.z)
+							* CFrame.Angles(0, (if lane.dir > 0 then 0 else math.pi) + arm * math.rad(40), 0)
+							* CFrame.new(-2, 0, 0)
+					end
+				end
 			end
 		end
 	end
-	-- Zebra crossing in the middle of the road, for the "why did the chicken..." joke.
-	for z = -HALF_D + 3, HALF_D - 3, 4.5 do
-		Build.part({
-			Name = "Zebra",
-			Size = Vector3.new(14, 0.07, 2.4),
-			Position = Vector3.new(0, M.RoadTopY + 0.035, z),
-			Color = Palette.LaneLine,
-			CanCollide = false,
-			CanQuery = false,
-			Parent = lines,
-		})
-	end
-	-- Red/white curbs along both road edges (decorative, the tiles do the collision).
-	for _, sign in { -1, 1 } do
+	-- Red/white curbs along the sidewalks and the median.
+	for _, z in { -INNER + 0.6, INNER - 0.6, -MEDIAN - 0.6, MEDIAN + 0.6 } do
 		for x = -HALF_L, HALF_L - 4, 4 do
-			Build.part({
-				Name = "Curb",
-				Size = Vector3.new(4, 0.7, 1.2),
-				Position = Vector3.new(x + 2, M.RoadTopY + 0.2, sign * (HALF_D - 0.6)),
-				Color = if (x / 4) % 2 == 0 then Palette.CurbRed else Palette.CurbWhite,
-				CanCollide = false,
-				CanQuery = false,
-				Parent = lines,
-			})
+			line(
+				lines,
+				"Curb",
+				Vector3.new(4, 0.7, 1.2),
+				Vector3.new(x + 2, M.RoadTopY + 0.2, z),
+				if (x / 4) % 2 == 0 then Palette.CurbRed else Palette.CurbWhite
+			)
+		end
+	end
+end
+
+-- The grass median: no traffic, but a harvester sweeps it and sprinklers burst.
+local function buildMedian(arena: Model)
+	local median = Build.model("Median", arena)
+	Build.part({
+		Name = "Grass",
+		Size = Vector3.new(M.RoadLength + 20, 2, M.MedianWidth - 2.4),
+		Position = Vector3.new(0, M.RoadTopY - 0.6, 0),
+		Color = Palette.Grass,
+		Material = Enum.Material.SmoothPlastic,
+		Parent = median,
+	})
+	-- Mown stripes.
+	for x = -HALF_L, HALF_L - 10, 20 do
+		line(median, "Stripe", Vector3.new(10, 0.05, M.MedianWidth - 3), Vector3.new(x + 5, M.RoadTopY + 0.43, 0), Palette.GrassDark)
+	end
+	local decor = Build.folder("Decor", median)
+	-- Sprinklers, numbered so server and clients agree on which one fires.
+	local index = 0
+	for x = -HALF_L + 30, HALF_L - 30, 52 do
+		index += 1
+		local head = Build.cylinder(CFrame.new(x, M.RoadTopY + 0.9, 0), 1, 0.9, {
+			Name = "SprinklerHead",
+			Color = Palette.MetalDark,
+			Material = Enum.Material.Metal,
+			CanCollide = false,
+			Parent = decor,
+		})
+		head:SetAttribute("Sprinkler", index)
+		Build.cylinder(CFrame.new(x, M.RoadTopY + 0.45, 0), 0.3, 2.2, { Name = "SprinklerBase", Color = Palette.Metal, CanCollide = false, Parent = decor })
+	end
+	-- Flowers and tufts, kept low so they never block a chicken.
+	for _ = 1, 60 do
+		local x = Build.rng:NextNumber(-HALF_L + 5, HALF_L - 5)
+		local z = Build.rng:NextNumber(-MEDIAN + 3, MEDIAN - 3)
+		if Build.rng:NextNumber() < 0.5 then
+			Props.flowers(decor, CFrame.new(x, M.RoadTopY + 0.4, z), 1.5, 3)
+		else
+			Props.grassTuft(decor, CFrame.new(x, M.RoadTopY + 0.4, z))
+		end
+	end
+	-- Barn gates at both ends: the harvester comes out of these.
+	for _, sign in { -1, 1 } do
+		Props.barnGate(decor, CFrame.new(sign * (HALF_L + 6), M.RoadTopY, 0) * CFrame.Angles(0, if sign > 0 then math.rad(-90) else math.rad(90), 0), M.MedianWidth)
+	end
+	for _, d in decor:GetDescendants() do
+		if d:IsA("BasePart") and not d:GetAttribute("Sprinkler") then
+			d.CanCollide = false
+			d.CanQuery = false
 		end
 	end
 end
@@ -107,7 +166,7 @@ local function buildSidewalks(arena: Model)
 	for _, side in { "A", "B" } do
 		local sign = if side == "A" then -1 else 1
 		for row = 1, M.SidewalkRows do
-			local z = sign * (HALF_D + (row - 0.5) * TILE_Z)
+			local z = sign * (INNER + (row - 0.5) * TILE_Z)
 			for col = 1, M.SidewalkColumns do
 				local x = -HALF_L + (col - 0.5) * TILE_X
 				local base = if side == "A" then Palette.SidewalkA else Palette.SidewalkB
@@ -131,11 +190,10 @@ end
 
 local function buildWalls(arena: Model)
 	local walls = Build.folder("Walls", arena)
-	local depth = ROAD_DEPTH + 2 * M.SidewalkDepth
 	for _, sign in { -1, 1 } do
 		Build.part({
 			Name = "EndWall",
-			Size = Vector3.new(2, M.WallHeight, depth),
+			Size = Vector3.new(2, M.WallHeight, OUTER_Z * 2),
 			Position = Vector3.new(sign * (HALF_L + 1), M.WallHeight / 2 - 10, 0),
 			Transparency = 1,
 			CanQuery = false,
@@ -147,84 +205,94 @@ end
 
 -- Decoration -------------------------------------------------------------------------------
 
--- A mountain with a tunnel mouth over the road at one end.
+-- A mountain at one end with a tunnel over each road.
 local function buildTunnel(decor: Instance, sign: number)
 	local m = Build.model(if sign < 0 then "TunnelWest" else "TunnelEast", decor)
 	local faceX = sign * (HALF_L + 2)
 	local mouthH = 16
-	-- Dark inside so cars appear out of the shadows.
-	Build.part({
-		Name = "Darkness",
-		Size = Vector3.new(30, mouthH, ROAD_DEPTH + 2),
-		Position = Vector3.new(faceX + sign * 16, mouthH / 2, 0),
-		Color = Color3.fromRGB(16, 14, 22),
-		Parent = m,
-	})
-	-- Stone arch frame.
-	Build.part({
-		Name = "Lintel",
-		Size = Vector3.new(4, 4, ROAD_DEPTH + 8),
-		Position = Vector3.new(faceX + sign * 1, mouthH + 2, 0),
-		Color = Palette.Rock:Lerp(Color3.new(1, 1, 1), 0.15),
-		Parent = m,
-	})
-	for _, zs in { -1, 1 } do
+	local stone = Palette.Rock:Lerp(Color3.new(1, 1, 1), 0.18)
+	for _, roadSign in { -1, 1 } do
+		local zc = roadSign * (MEDIAN + Layout.roadDepth / 2)
 		Build.part({
-			Name = "Pillar",
-			Size = Vector3.new(4, mouthH + 4, 4),
-			Position = Vector3.new(faceX + sign * 1, (mouthH + 4) / 2 - 2, zs * (HALF_D + 2)),
-			Color = Palette.Rock:Lerp(Color3.new(1, 1, 1), 0.15),
+			Name = "Darkness",
+			Size = Vector3.new(40, mouthH, Layout.roadDepth + 2),
+			Position = Vector3.new(faceX + sign * 21, mouthH / 2, zc),
+			Color = Color3.fromRGB(16, 14, 22),
 			Parent = m,
 		})
-	end
-	-- Mountain chunks around and above the mouth.
-	for _ = 1, 26 do
-		local z = Build.rng:NextNumber(-OUTER_Z - 10, OUTER_Z + 10)
-		local y = Build.rng:NextNumber(mouthH + 2, mouthH + 40)
-		if math.abs(z) > HALF_D + 4 then
-			y = Build.rng:NextNumber(-6, mouthH + 34)
+		Build.part({
+			Name = "Lintel",
+			Size = Vector3.new(4, 4, Layout.roadDepth + 8),
+			Position = Vector3.new(faceX + sign * 1, mouthH + 2, zc),
+			Color = stone,
+			Parent = m,
+		})
+		for _, zs in { -1, 1 } do
+			Build.part({
+				Name = "Pillar",
+				Size = Vector3.new(4, mouthH + 4, 4),
+				Position = Vector3.new(faceX + sign * 1, (mouthH + 4) / 2 - 2, zc + zs * (Layout.roadDepth / 2 + 2)),
+				Color = stone,
+				Parent = m,
+			})
 		end
-		local size = Build.rng:NextNumber(14, 30)
-		Props.rock(m, CFrame.new(faceX + sign * (size * 0.4 + Build.rng:NextNumber(0, 18)), y, z), size)
+		-- Sign over each tunnel.
+		local board = Build.part({
+			Name = "Sign",
+			Size = Vector3.new(0.6, 5, 26),
+			Position = Vector3.new(faceX - sign * 0.6, mouthH + 7, zc),
+			Color = Color3.fromRGB(255, 200, 40),
+			Parent = m,
+		})
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = if sign < 0 then Enum.NormalId.Right else Enum.NormalId.Left
+		gui.PixelsPerStud = 30
+		gui.Parent = board
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Text = "⚠ CHICKEN CROSSING ⚠"
+		label.Font = Enum.Font.LuckiestGuy
+		label.TextScaled = true
+		label.TextColor3 = Color3.fromRGB(30, 25, 40)
+		label.Parent = gui
 	end
-	-- Grass and pines on top.
-	for _ = 1, 8 do
+	-- Mountain chunks around and above the mouths.
+	for _ = 1, 40 do
+		local z = Build.rng:NextNumber(-OUTER_Z - 10, OUTER_Z + 10)
+		local y = Build.rng:NextNumber(mouthH + 2, mouthH + 46)
+		if math.abs(z) > INNER + 4 then
+			y = Build.rng:NextNumber(-6, mouthH + 40)
+		end
+		local size = Build.rng:NextNumber(16, 34)
+		Props.rock(m, CFrame.new(faceX + sign * (size * 0.4 + Build.rng:NextNumber(0, 22)), y, z), size)
+	end
+	for _ = 1, 12 do
 		local z = Build.rng:NextNumber(-OUTER_Z, OUTER_Z)
-		Props.pineTree(m, CFrame.new(faceX + sign * Build.rng:NextNumber(14, 34), mouthH + 30 + Build.rng:NextNumber(0, 10), z), Build.rng:NextNumber(16, 26))
+		Props.pineTree(m, CFrame.new(faceX + sign * Build.rng:NextNumber(16, 40), mouthH + 34 + Build.rng:NextNumber(0, 10), z), Build.rng:NextNumber(16, 28))
 	end
-	-- Road continues into the tunnel.
-	Build.part({
-		Name = "TunnelRoad",
-		Size = Vector3.new(30, 1, ROAD_DEPTH),
-		Position = Vector3.new(faceX + sign * 16, M.RoadTopY - 0.5, 0),
-		Color = Palette.AsphaltDark,
-		Parent = m,
-	})
-	-- Hanging warning sign above the mouth.
-	local sign_ = Build.part({
-		Name = "Sign",
-		Size = Vector3.new(0.6, 5, 22),
-		Position = Vector3.new(faceX - sign * 0.6, mouthH + 7, 0),
-		Color = Color3.fromRGB(255, 200, 40),
-		Parent = m,
-	})
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = if sign < 0 then Enum.NormalId.Right else Enum.NormalId.Left
-	gui.PixelsPerStud = 30
-	gui.Parent = sign_
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Text = "⚠ CHICKEN CROSSING ⚠"
-	label.Font = Enum.Font.LuckiestGuy
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(30, 25, 40)
-	label.Parent = gui
 end
 
 local function islandDecor(kind: string): (Model, CFrame) -> ()
 	return function(m: Model, top: CFrame)
-		if kind == "barn" then
+		if kind == "bigbarn" then
+			-- Behind side A, facing the road (+Z).
+			Props.barn(m, top * CFrame.new(0, 0, 2) * CFrame.Angles(0, math.pi, 0), 1.5)
+			Props.silo(m, top * CFrame.new(24, 0, -4), 40)
+			Props.silo(m, top * CFrame.new(-24, 0, -6), 34)
+			Props.hayBale(m, top * CFrame.new(-14, 0, 18), true)
+			Props.hayBale(m, top * CFrame.new(14, 0, 20))
+			Props.fence(m, (top * CFrame.new(-28, 0, 24)).Position, (top * CFrame.new(28, 0, 24)).Position)
+			return
+		elseif kind == "bigwindmill" then
+			-- Behind side B.
+			Props.windmill(m, top, 52)
+			Props.roundTree(m, top * CFrame.new(18, 0, 8), 18)
+			Props.pineTree(m, top * CFrame.new(-18, 0, 6), 22)
+			Props.flowers(m, top * CFrame.new(0, 0, -16), 10, 30)
+			Props.hayBale(m, top * CFrame.new(10, 0, -14), true)
+			return
+		elseif kind == "barn" then
 			Props.barn(m, top * CFrame.new(0, 0, 4) * CFrame.Angles(0, math.rad(200), 0), 0.9)
 			Props.silo(m, top * CFrame.new(16, 0, 10), 26)
 			Props.hayBale(m, top * CFrame.new(-14, 0, -8), true)
@@ -291,19 +359,26 @@ local function buildScenery(decor: Instance)
 	-- Farm islands floating around the arena.
 	type IslandSpec = { cf: CFrame, radius: number, kind: string }
 	local islands: { IslandSpec } = {
-		{ cf = CFrame.new(-150, -10, 175), radius = 26, kind = "barn" },
-		{ cf = CFrame.new(170, 8, 160), radius = 18, kind = "windmill" },
-		{ cf = CFrame.new(220, -30, -40), radius = 20, kind = "forest" },
-		{ cf = CFrame.new(-235, 20, -30), radius = 18, kind = "house" },
-		{ cf = CFrame.new(40, -45, 230), radius = 14, kind = "small" },
-		{ cf = CFrame.new(-60, 35, -260), radius = 16, kind = "windmill" },
-		{ cf = CFrame.new(140, 25, -230), radius = 22, kind = "barn" },
-		{ cf = CFrame.new(-200, -40, -190), radius = 15, kind = "forest" },
-		{ cf = CFrame.new(-280, 0, 120), radius = 12, kind = "small" },
-		{ cf = CFrame.new(290, 15, 60), radius = 13, kind = "small" },
+		-- Landmarks that tell the two sides apart.
+		{ cf = CFrame.new(70, -6, -168), radius = 30, kind = "bigbarn" },
+		{ cf = CFrame.new(-50, -6, 172), radius = 28, kind = "bigwindmill" },
+		{ cf = CFrame.new(-235, -12, 205), radius = 24, kind = "barn" },
+		{ cf = CFrame.new(240, 8, 195), radius = 18, kind = "windmill" },
+		{ cf = CFrame.new(300, -30, -40), radius = 22, kind = "forest" },
+		{ cf = CFrame.new(-305, 20, -30), radius = 18, kind = "house" },
+		{ cf = CFrame.new(70, -45, 290), radius = 14, kind = "small" },
+		{ cf = CFrame.new(-110, 28, -310), radius = 16, kind = "windmill" },
+		{ cf = CFrame.new(215, 25, -270), radius = 22, kind = "barn" },
+		{ cf = CFrame.new(-255, -40, -215), radius = 15, kind = "forest" },
+		{ cf = CFrame.new(-340, 0, 140), radius = 12, kind = "small" },
+		{ cf = CFrame.new(350, 15, 80), radius = 13, kind = "small" },
 	}
 	for i, info in islands do
-		local cf = info.cf * CFrame.Angles(0, Build.rng:NextNumber(0, math.pi * 2), 0)
+		-- Landmarks face the road; the rest get a random turn.
+		local turn = if info.kind == "bigbarn" then 0
+			elseif info.kind == "bigwindmill" then 0
+			else Build.rng:NextNumber(0, math.pi * 2)
+		local cf = info.cf * CFrame.Angles(0, turn, 0)
 		local island = Props.floatingIsland(scenery, cf, info.radius, islandDecor(info.kind))
 		island.Name = `Island{i}`
 	end
@@ -329,7 +404,8 @@ end
 function WorldBuilder.buildArena(parent: Instance): Model
 	Build.reseed(1001)
 	local arena = Build.model("Arena")
-	buildRoad(arena)
+	buildRoads(arena)
+	buildMedian(arena)
 	buildSidewalks(arena)
 	buildWalls(arena)
 	local decor = Build.folder("Decor", arena)

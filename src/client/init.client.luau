@@ -14,6 +14,7 @@ require(Controllers.EggController).start()
 require(Controllers.EmoteController).start()
 require(Controllers.WorldAnimator).start()
 require(Controllers.ChickenAnimator).start()
+require(Controllers.GameplayFx).start()
 require(Controllers.MusicController).start()
 
 -- These wait for the Studio-built GUI to arrive in PlayerGui (after the first spawn).

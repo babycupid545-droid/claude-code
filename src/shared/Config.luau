@@ -21,21 +21,24 @@ Config.Timing = {
 }
 
 Config.Map = {
-	-- The road runs along the X axis; chickens cross it along Z.
-	RoadLength = 240,
-	LaneCount = 6,
+	-- Two roads run along the X axis with a grass median between them; chickens cross along Z.
+	--   sidewalk A | road A (lanes go +X) | median | road B (lanes go -X) | sidewalk B
+	RoadLength = 320,
+	LanesPerRoad = 4,
 	LaneWidth = 14,
+	MedianWidth = 30,
 	RoadTopY = 0,
-	-- Sidewalk A is at negative Z, sidewalk B at positive Z.
 	SidewalkDepth = 40,
 	SidewalkRows = 4,
-	SidewalkColumns = 12,
+	SidewalkColumns = 20,
 	SidewalkTopY = 0.5,
 	WallHeight = 80,
 	-- Anything below this is eliminated (fell off the map).
 	KillY = -40,
-	LobbyCenter = Vector3.new(0, 70, -150),
+	LobbyCenter = Vector3.new(0, 70, -205),
 	LobbySize = Vector3.new(90, 1, 50),
+	-- What players call each side (signs and HUD).
+	SideNames = { A = "BARN", B = "WINDMILL" },
 }
 
 Config.Chicken = {
@@ -83,19 +86,44 @@ Config.Egg = {
 	KnockbackDuration = 0.25,
 }
 
-Config.Sidewalk = {
-	-- Solo-style modes: one whole sidewalk collapses at a time, forcing everyone across.
-	FirstCollapseAt = 20,
-	-- Pause between one collapse ending and the next warning; shrinks each time.
-	CollapseRest = 12,
-	CollapseRestMin = 4,
-	CollapseRestStep = 2,
-	CollapseWarning = 4,
-	CollapseDuration = 7,
-	-- Teams: the outer row of both sidewalks falls away on a timer.
-	ShrinkInterval = 25,
-	ShrinkWarning = 4,
-	MinRows = 1,
+-- Crossing: everyone must reach the other sidewalk before the one they're on crumbles.
+-- It rises again a moment later, and then they must cross back. Each phase is shorter.
+Config.Shuttle = {
+	FirstPhase = 22, -- seconds to make the first crossing
+	PhaseStep = 2, -- each following phase is this much shorter...
+	MinPhase = 11, -- ...down to this
+	Warning = 4, -- tiles shake and flash for this long before dropping
+	RiseDelay = 3, -- how long a dropped sidewalk stays down
+}
+
+-- The grass median is safe from cars but not from these.
+Config.Median = {
+	HarvesterEveryMin = 16,
+	HarvesterEveryMax = 26,
+	HarvesterWarning = 2.5,
+	HarvesterSpeed = 55,
+	HarvesterLength = 20,
+	HarvesterWidth = 22,
+	HarvesterHeight = 9,
+	SprinklerEveryMin = 2.5,
+	SprinklerEveryMax = 5,
+	SprinklerWarning = 1,
+	SprinklerRadius = 13,
+	SprinklerPush = 70,
+}
+
+-- Random events that spice up rounds. Several per round, each announced on screen.
+Config.Events = {
+	FirstAt = 25, -- seconds into the round
+	Gap = 18, -- quiet time between events
+	Duration = 24,
+	SpeedDemonsMult = 1.6,
+	LowGravity = 70,
+	BigEggsMult = 2.3,
+	EggRainEvery = 0.35,
+	EggRainReward = 3,
+	EggRainLifetime = 7,
+	HarvestTimeEvery = 5,
 }
 
 Config.RoadRage = {

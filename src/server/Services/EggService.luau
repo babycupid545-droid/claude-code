@@ -41,6 +41,7 @@ local rules: Rules = {
 }
 local eggs: { Egg } = {}
 local lastShot: { [Player]: number } = {}
+local knockbackMult = 1
 
 local function isFiniteVector(v: Vector3): boolean
 	return v.X == v.X and v.Y == v.Y and v.Z == v.Z and v.Magnitude < math.huge
@@ -89,6 +90,7 @@ local function onShoot(player: Player, direction: unknown, localId: unknown)
 	}
 	table.insert(eggs, egg)
 
+	Remotes.EggShot:FireAllClients(player.UserId)
 	local firedAt = workspace:GetServerTimeNow()
 	local eggSkin = DataService.equipped(player, "EggSkin")
 	for _, other in Players:GetPlayers() do
@@ -104,7 +106,7 @@ local function onEggHit(egg: Egg, result: RaycastResult)
 	if target and target ~= egg.shooter and rules.canHit(egg.shooter, target) then
 		local flat = EggPhysics.velocityAt(egg.velocity, egg.t) * Vector3.new(1, 0, 1)
 		local push = if flat.Magnitude > 1e-3 then flat.Unit else Vector3.zero
-		local knockback = push * Config.Egg.KnockbackHorizontal + Vector3.new(0, Config.Egg.KnockbackUp, 0)
+		local knockback = (push * Config.Egg.KnockbackHorizontal + Vector3.new(0, Config.Egg.KnockbackUp, 0)) * knockbackMult
 		-- The target's client owns its character physics, so it applies the push itself.
 		Remotes.Knockback:FireClient(target, knockback)
 		if rules.onHit then
@@ -137,6 +139,11 @@ end
 
 function EggService.setRules(newRules: Rules)
 	rules = newRules
+end
+
+-- Big Eggs event.
+function EggService.setKnockbackMult(mult: number)
+	knockbackMult = mult
 end
 
 function EggService.clear()

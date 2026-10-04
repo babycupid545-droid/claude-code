@@ -17,11 +17,15 @@ export type Ramp = {
 	maxMult: number,
 }
 
+export type LaneSpec = { z: number, dir: number }
+
+-- A stretch of the round where traffic is faster/denser (events like Speed Demons).
+export type Window = { start: number, stop: number, speed: number, density: number }
+
 export type Params = {
 	seed: number,
 	startTime: number,
-	laneCount: number,
-	laneWidth: number,
+	lanes: { LaneSpec },
 	roadLength: number,
 	carLength: number,
 	baseSpeed: number,
@@ -32,6 +36,7 @@ export type Params = {
 	ramp: Ramp?,
 	suddenDeathAt: number?,
 	suddenDeathMult: number?,
+	windows: { Window }?, -- times relative to startTime
 }
 
 export type Car = {
@@ -42,6 +47,12 @@ export type Car = {
 	spawnTime: number, -- time the car's front bumper reaches the road edge
 	kind: number, -- picks a car model; renderer takes it modulo the model count
 	driver: number?, -- UserId of a Road Rage driver
+	-- Special vehicles (the median harvester) override these:
+	z: number?,
+	length: number?,
+	width: number?,
+	height: number?,
+	vehicle: string?,
 }
 
 type Lane = {
@@ -92,8 +103,7 @@ function TrafficSchedule.new(params: Params): Schedule
 	}, TrafficSchedule)
 
 	local seed = normalizeSeed(params.seed)
-	local half = params.laneCount / 2
-	for i = 1, params.laneCount do
+	for i, spec in params.lanes do
 		seed = nextSeed(seed)
 		local speedRoll = toUnit(seed)
 		seed = nextSeed(seed)
@@ -102,8 +112,7 @@ function TrafficSchedule.new(params: Params): Schedule
 		local firstGap = toUnit(seed) * params.maxGap
 		table.insert(self.lanes, {
 			index = i,
-			-- Half the lanes drive each way, like a real road.
-			dir = if i <= half then 1 else -1,
+			dir = spec.dir,
 			speed = params.baseSpeed
 				* (params.laneSpeedMin + (params.laneSpeedMax - params.laneSpeedMin) * speedRoll),
 			seed = laneSeed,
@@ -130,24 +139,41 @@ function TrafficSchedule.multipliers(self: Schedule, t: number): (number, number
 		speedMult *= m
 		densityMult *= m
 	end
+	if p.windows then
+		for _, w in p.windows do
+			if elapsed >= w.start and elapsed < w.stop then
+				speedMult *= w.speed
+				densityMult *= w.density
+			end
+		end
+	end
 	return speedMult, densityMult
 end
 
 function TrafficSchedule.laneZ(self: Schedule, lane: number): number
-	local p = self.params
-	return -p.laneCount * p.laneWidth / 2 + (lane - 0.5) * p.laneWidth
+	local spec = self.params.lanes[lane]
+	return if spec then spec.z else 0
+end
+
+-- The z a car drives along (special vehicles carry their own).
+function TrafficSchedule.carZ(self: Schedule, car: Car): number
+	return car.z or self:laneZ(car.lane)
+end
+
+function TrafficSchedule.carLength(self: Schedule, car: Car): number
+	return car.length or self.params.carLength
 end
 
 -- Where the car's center is at time t.
 function TrafficSchedule.carX(self: Schedule, car: Car, t: number): number
 	local p = self.params
-	local startX = -car.dir * (p.roadLength / 2 + p.carLength / 2)
+	local startX = -car.dir * (p.roadLength / 2 + self:carLength(car) / 2)
 	return startX + car.dir * car.speed * (t - car.spawnTime)
 end
 
 function TrafficSchedule.carEndTime(self: Schedule, car: Car): number
 	local p = self.params
-	return car.spawnTime + (p.roadLength + p.carLength) / car.speed
+	return car.spawnTime + (p.roadLength + self:carLength(car)) / car.speed
 end
 
 function TrafficSchedule.addCar(self: Schedule, car: Car)
@@ -235,16 +261,15 @@ function TrafficSchedule.findHit(
 	carHeight: number,
 	forgiveness: number
 ): Car?
-	local p = self.params
-	if box.feetY > roadTopY + carHeight - forgiveness then
-		return nil
-	end
-	local reachX = p.carLength / 2 + box.radius - forgiveness
-	local reachZ = carWidth / 2 + box.radius - forgiveness
 	for _, car in self.cars do
 		if t >= car.spawnTime and t <= self:carEndTime(car) then
-			if math.abs(self:laneZ(car.lane) - box.z) < reachZ and math.abs(self:carX(car, t) - box.x) < reachX then
-				return car
+			local height = car.height or carHeight
+			if box.feetY <= roadTopY + height - forgiveness then
+				local reachX = self:carLength(car) / 2 + box.radius - forgiveness
+				local reachZ = (car.width or carWidth) / 2 + box.radius - forgiveness
+				if math.abs(self:carZ(car) - box.z) < reachZ and math.abs(self:carX(car, t) - box.x) < reachX then
+					return car
+				end
 			end
 		end
 	end

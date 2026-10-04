@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.Shared
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
+local Layout = require(Shared.Layout)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
 local TrafficSchedule = require(Shared.TrafficSchedule)
@@ -93,7 +94,15 @@ end
 
 local function makeCar(car: TrafficSchedule.Car): Model
 	local model: Model
-	if car.driver then
+	if car.vehicle == "Harvester" then
+		local template = Assets.find("Cars", "Harvester")
+		if template and template:IsA("Model") then
+			model = template:Clone()
+		else
+			model = makeDefaultCar(3)
+			model:ScaleTo(1.5)
+		end
+	elseif car.driver then
 		local template = Assets.find("Cars", "RageCar")
 		if template and template:IsA("Model") then
 			model = template:Clone()
@@ -161,7 +170,7 @@ local function carFeedback(s: TrafficSchedule.Schedule, t: number)
 	local p = root.Position
 	for _, car in s:activeCars(t) do
 		local x = s:carX(car, t)
-		local laneZ = s:laneZ(car.lane)
+		local laneZ = s:carZ(car)
 		local dz = math.abs(laneZ - p.Z)
 		-- Whoosh as it passes close by.
 		if not whooshed[car.id] and dz < 22 and math.abs(x - p.X) < 16 and math.abs(p.Y - M.RoadTopY) < 40 then
@@ -173,7 +182,7 @@ local function carFeedback(s: TrafficSchedule.Schedule, t: number)
 			end
 		end
 		-- How soon will it reach me if I stay in this lane?
-		if dz < M.LaneWidth / 2 + 1 and p.Y < M.RoadTopY + T.CarHeight + 4 then
+		if dz < (car.width or T.CarWidth) / 2 + 3 and p.Y < M.RoadTopY + (car.height or T.CarHeight) + 4 then
 			local eta = (p.X - x) / (car.dir * car.speed)
 			if eta > 0 and eta < 1.1 then
 				danger = math.max(danger, 1 - eta / 1.1)
@@ -183,9 +192,12 @@ local function carFeedback(s: TrafficSchedule.Schedule, t: number)
 	for _, car in s:incomingCars(t, T.WarningTime) do
 		if not announced[car.id] then
 			announced[car.id] = true
-			local laneZ = s:laneZ(car.lane)
+			local laneZ = s:carZ(car)
 			local entry = Vector3.new(-car.dir * M.RoadLength / 2, M.RoadTopY + 4, laneZ)
-			if car.driver then
+			if car.vehicle == "Harvester" then
+				Sfx.playAt("Alarm", entry)
+				Sfx.playAt("RageHorn", entry, { pitch = 0.6 })
+			elseif car.driver then
 				Sfx.playAt("RageHorn", entry)
 			elseif math.abs(laneZ - p.Z) < M.LaneWidth / 2 + 2 and math.abs(p.Y - M.RoadTopY) < 15 then
 				Sfx.play("LaneWarning")
@@ -211,8 +223,8 @@ local function buildWarningLights(s: TrafficSchedule.Schedule)
 		light:Destroy()
 	end
 	table.clear(warningLights)
-	for lane = 1, M.LaneCount do
-		for _, dir in { 1, -1 } do
+	for lane, spec in Layout.lanes do
+		for _, dir in { spec.dir } do
 			-- The light sits on the tunnel the car comes out of.
 			local x = -dir * (M.RoadLength / 2 - 0.4)
 			warningLights[laneLightKey(lane, dir)] = Ui.new("Part", {
@@ -222,12 +234,27 @@ local function buildWarningLights(s: TrafficSchedule.Schedule)
 				CanQuery = false,
 				CanTouch = false,
 				Size = Vector3.new(0.4, 2.5, M.LaneWidth * 0.6),
-				Position = Vector3.new(x, M.RoadTopY + 8, s:laneZ(lane)),
+				Position = Vector3.new(x, M.RoadTopY + 8, spec.z),
 				Material = Enum.Material.Neon,
 				Color = Color3.fromRGB(60, 20, 20),
 				Parent = folder,
 			})
 		end
+	end
+	-- Big flashing lights over the median barn gates for the harvester.
+	for _, dir in { 1, -1 } do
+		warningLights[laneLightKey(0, dir)] = Ui.new("Part", {
+			Name = "HarvesterWarning",
+			Anchored = true,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			Size = Vector3.new(1, 3, Config.Map.MedianWidth * 0.8),
+			Position = Vector3.new(-dir * (M.RoadLength / 2 + 5), M.RoadTopY + 17, 0),
+			Material = Enum.Material.Neon,
+			Color = Color3.fromRGB(60, 20, 20),
+			Parent = folder,
+		})
 	end
 end
 
@@ -272,7 +299,6 @@ local function render()
 	s:update(t)
 
 	local seen: { [string]: boolean } = {}
-	local y = M.RoadTopY + T.CarHeight / 2
 	for _, car in s:activeCars(t) do
 		seen[car.id] = true
 		local model = models[car.id]
@@ -280,7 +306,7 @@ local function render()
 			model = makeCar(car)
 			models[car.id] = model
 		end
-		local pos = Vector3.new(s:carX(car, t), y, s:laneZ(car.lane))
+		local pos = Vector3.new(s:carX(car, t), M.RoadTopY + (car.height or T.CarHeight) / 2, s:carZ(car))
 		model:PivotTo(CFrame.lookAt(pos, pos + Vector3.new(car.dir, 0, 0)))
 	end
 	for id, model in models do
@@ -298,8 +324,14 @@ local function render()
 	for _, car in s:incomingCars(t, T.WarningTime) do
 		lit[laneLightKey(car.lane, car.dir)] = true
 	end
+	for _, car in s:incomingCars(t, Config.Median.HarvesterWarning) do
+		if car.vehicle == "Harvester" then
+			lit[laneLightKey(0, car.dir)] = true
+		end
+	end
+	local blink = math.floor(os.clock() * 8) % 2 == 0
 	for key, light in warningLights do
-		light.Color = if lit[key] then Color3.fromRGB(255, 40, 30) else Color3.fromRGB(60, 20, 20)
+		light.Color = if lit[key] and blink then Color3.fromRGB(255, 40, 30) else Color3.fromRGB(60, 20, 20)
 	end
 end
 

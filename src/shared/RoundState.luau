@@ -11,6 +11,10 @@
 --   TrafficParams  JSON TrafficSchedule.Params, or "" when there is no traffic
 --   Message        big centered text (winner, countdown hints)
 --   SuddenDeath    true once traffic speeds up for the end of the round
+--   CrossTarget    "A" | "B" | "": the sidewalk everyone must reach
+--   CrossDeadline  server time the other sidewalk crumbles
+--   Event          id of the running event ("" when none), see Shared/Events
+--   EventEndsAt    server time the event ends
 -- Player attributes:
 --   Alive          true while a chicken is in the current round
 --   Driver         true while driving in Road Rage
@@ -36,6 +40,10 @@ if RunService:IsServer() then
 	state:SetAttribute("TrafficParams", "")
 	state:SetAttribute("Message", "")
 	state:SetAttribute("SuddenDeath", false)
+	state:SetAttribute("CrossTarget", "")
+	state:SetAttribute("CrossDeadline", 0)
+	state:SetAttribute("Event", "")
+	state:SetAttribute("EventEndsAt", 0)
 	state.Parent = ReplicatedStorage
 	return state
 end

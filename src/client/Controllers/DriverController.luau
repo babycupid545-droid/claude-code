@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
+local Layout = require(Shared.Layout)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
 
@@ -23,7 +24,7 @@ local player = Players.LocalPlayer
 local M = Config.Map
 
 local active = false
-local lane = math.ceil(M.LaneCount / 2)
+local lane = 1
 local lastLaunch = 0
 local gui: ScreenGui
 local cooldownFill: Frame
@@ -31,7 +32,7 @@ local hint: TextLabel
 local laneMarker: Part? = nil
 
 local function laneZ(index: number): number
-	return -M.LaneCount * M.LaneWidth / 2 + (index - 0.5) * M.LaneWidth
+	return Layout.lanes[index].z
 end
 
 local function updateMarker()
@@ -41,7 +42,7 @@ local function updateMarker()
 end
 
 local function changeLane(delta: number)
-	lane = math.clamp(lane + delta, 1, M.LaneCount)
+	lane = math.clamp(lane + delta, 1, #Layout.lanes)
 	Sfx.play("UiClick", { pitch = 1 + lane * 0.05 })
 	updateMarker()
 end
@@ -52,7 +53,7 @@ local function launch(dir: number)
 		return
 	end
 	lastLaunch = os.clock()
-	Remotes.LaunchRageCar:FireServer(lane, dir)
+	Remotes.LaunchRageCar:FireServer(lane)
 	Sfx.play("RageHorn")
 	if laneMarker then
 		laneMarker.Transparency = 0.2
@@ -90,7 +91,7 @@ local function setActive(on: boolean)
 	if on then
 		camera.CameraType = Enum.CameraType.Scriptable
 		-- Looking towards -Z from above: screen-right is +X, screen-up is lane 1.
-		camera.CFrame = CFrame.lookAt(Vector3.new(0, 170, 95), Vector3.new(0, 0, 0))
+		camera.CFrame = CFrame.lookAt(Vector3.new(0, 230, 130), Vector3.new(0, 0, 0))
 		laneMarker = Ui.new("Part", {
 			Name = "DriverLane",
 			Anchored = true,
@@ -159,7 +160,7 @@ function DriverController.start()
 			task.defer(function()
 				if active then
 					workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-					workspace.CurrentCamera.CFrame = CFrame.lookAt(Vector3.new(0, 170, 95), Vector3.new(0, 0, 0))
+					workspace.CurrentCamera.CFrame = CFrame.lookAt(Vector3.new(0, 230, 130), Vector3.new(0, 0, 0))
 				end
 			end)
 		end

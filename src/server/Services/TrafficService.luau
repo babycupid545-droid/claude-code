@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
+local Layout = require(Shared.Layout)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
 local TrafficSchedule = require(Shared.TrafficSchedule)
@@ -24,6 +25,7 @@ export type Options = {
 	rushHour: boolean,
 	startTime: number,
 	suddenDeathAt: number,
+	windows: { TrafficSchedule.Window }?,
 	getChickens: () -> { Player },
 	onHit: (Player, TrafficSchedule.Car) -> (),
 }
@@ -58,8 +60,13 @@ function TrafficService.start(options: Options)
 	local params: TrafficSchedule.Params = {
 		seed = Random.new():NextInteger(1, 2 ^ 30),
 		startTime = options.startTime,
-		laneCount = Config.Map.LaneCount,
-		laneWidth = Config.Map.LaneWidth,
+		lanes = (function()
+			local list = {}
+			for _, lane in Layout.lanes do
+				table.insert(list, { z = lane.z, dir = lane.dir })
+			end
+			return list
+		end)(),
 		roadLength = Config.Map.RoadLength,
 		carLength = T.CarLength,
 		baseSpeed = T.BaseSpeed,
@@ -77,6 +84,7 @@ function TrafficService.start(options: Options)
 			else nil,
 		suddenDeathAt = options.suddenDeathAt,
 		suddenDeathMult = T.SuddenDeathMult,
+		windows = options.windows,
 	}
 	local s = TrafficSchedule.new(params)
 	schedule = s
@@ -110,25 +118,54 @@ function TrafficService.stop()
 	RoundState:SetAttribute("TrafficParams", "")
 end
 
--- Road Rage: a driver sends one car down a lane. Everyone sees it after a short warning.
-function TrafficService.launchRageCar(driver: Player, lane: number, dir: number): boolean
+-- Sends an extra vehicle down the road (Road Rage cars, the median harvester). Everyone
+-- sees it after `delay` seconds; it's hit-checked like normal traffic.
+function TrafficService.launch(car: TrafficSchedule.Car, delay: number): boolean
 	local s = schedule
 	if not s then
 		return false
 	end
 	rageCount += 1
-	local car: TrafficSchedule.Car = {
-		id = `rage:{rageCount}`,
-		lane = lane,
-		dir = dir,
-		speed = Config.RoadRage.Speed,
-		spawnTime = workspace:GetServerTimeNow() + Config.RoadRage.LaunchDelay,
-		kind = 0,
-		driver = driver.UserId,
-	}
+	car.id = `x:{rageCount}`
+	car.spawnTime = workspace:GetServerTimeNow() + delay
 	s:addCar(car)
 	Remotes.RageCar:FireAllClients(car)
 	return true
+end
+
+-- Road Rage: a driver sends a car down a lane (in that lane's direction).
+function TrafficService.launchRageCar(driver: Player, lane: number): boolean
+	local spec = Layout.lanes[lane]
+	if not spec then
+		return false
+	end
+	return TrafficService.launch({
+		id = "",
+		lane = lane,
+		dir = spec.dir,
+		speed = Config.RoadRage.Speed,
+		spawnTime = 0,
+		kind = 0,
+		driver = driver.UserId,
+	}, Config.RoadRage.LaunchDelay)
+end
+
+-- The combine harvester that sweeps the grass median.
+function TrafficService.launchHarvester(dir: number): boolean
+	local H = Config.Median
+	return TrafficService.launch({
+		id = "",
+		lane = 0,
+		dir = dir,
+		speed = H.HarvesterSpeed,
+		spawnTime = 0,
+		kind = 0,
+		z = 0,
+		length = H.HarvesterLength,
+		width = H.HarvesterWidth,
+		height = H.HarvesterHeight,
+		vehicle = "Harvester",
+	}, H.HarvesterWarning)
 end
 
 return TrafficService
