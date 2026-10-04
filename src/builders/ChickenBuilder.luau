@@ -2,8 +2,9 @@
 -- Builds a cartoon chicken character for every chicken skin, saved to
 -- ReplicatedStorage.Assets.Chickens/<SkinId>. Players spawn as these.
 --
--- The chicken is made of smooth ellipsoids (Parts with a sphere SpecialMesh): a plump body
--- with a fluffy chest, big round head, shiny eyes, blushing cheeks, beak, comb and wattle,
+-- With the Blender meshes imported (assets/models/Chicken.glb, see docs/STUDIO_SETUP.md) the
+-- chicken is the smooth sculpted model, recoloured per skin. Without them, it's made of
+-- smooth ellipsoids (Parts with a sphere SpecialMesh): a plump body with a fluffy chest, big round head, shiny eyes, blushing cheeks, beak, comb and wattle,
 -- layered wings, a fanned tail, feathery thighs and orange legs with toes.
 --
 -- Rig: HumanoidRootPart -Root-> Body; Body -Neck-> Head, -LeftWing/-RightWing-> wings,
@@ -14,6 +15,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Cosmetics = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Cosmetics"))
+local Meshes = require(script.Parent.Meshes)
 
 local ChickenBuilder = {}
 
@@ -114,6 +116,25 @@ local function motor(name: string, part0: BasePart, part1: BasePart, joint: CFra
 	m.Parent = part1
 end
 
+local function addBill(model: Model, head: BasePart, center: CFrame, look: Look)
+	weld(head, ell("Bill", Vector3.new(1.15, 0.34, 1.15), center * CFrame.new(0, -0.18, -1.3) * CFrame.Angles(math.rad(-6), 0, 0), look.beak, model))
+	weld(head, ell("BillLower", Vector3.new(1.0, 0.24, 0.95), center * CFrame.new(0, -0.36, -1.18), look.beak:Lerp(BLACK, 0.12), model))
+end
+
+local function addAntenna(model: Model, head: BasePart, center: CFrame)
+	local stalk = basePart("Antenna", Vector3.new(0.12, 1.1, 0.12), center * CFrame.new(0.45, 1.45, 0.2) * CFrame.Angles(0, 0, math.rad(-12)), Color3.fromRGB(90, 96, 110), model)
+	stalk.Material = Enum.Material.Metal
+	weld(head, stalk)
+	local bulb = ell("AntennaTip", Vector3.new(0.34, 0.34, 0.34), center * CFrame.new(0.57, 2.0, 0.2), Color3.fromRGB(255, 70, 70), model)
+	bulb.Material = Enum.Material.Neon
+	weld(head, bulb)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 70, 70)
+	light.Range = 6
+	light.Brightness = 1.5
+	light.Parent = bulb
+end
+
 -- Body parts ---------------------------------------------------------------------------------
 
 local function buildHead(model: Model, body: BasePart, look: Look): BasePart
@@ -146,8 +167,7 @@ local function buildHead(model: Model, body: BasePart, look: Look): BasePart
 
 	-- Beak (upper and lower), or a duck bill.
 	if look.style == "Duck" then
-		weld(head, ell("Bill", Vector3.new(1.15, 0.34, 1.15), center * CFrame.new(0, -0.18, -1.3) * CFrame.Angles(math.rad(-6), 0, 0), look.beak, model))
-		weld(head, ell("BillLower", Vector3.new(1.0, 0.24, 0.95), center * CFrame.new(0, -0.36, -1.18), look.beak:Lerp(BLACK, 0.12), model))
+		addBill(model, head, center, look)
 	else
 		weld(head, ell("Beak", Vector3.new(0.72, 0.5, 1.0), center * CFrame.new(0, -0.08, -1.28) * CFrame.Angles(math.rad(-14), 0, 0), look.beak, model))
 		weld(head, ell("BeakLower", Vector3.new(0.56, 0.3, 0.7), center * CFrame.new(0, -0.34, -1.15) * CFrame.Angles(math.rad(8), 0, 0), look.beak:Lerp(BLACK, 0.15), model))
@@ -175,17 +195,7 @@ local function buildHead(model: Model, body: BasePart, look: Look): BasePart
 	end
 
 	if look.style == "Robo" then
-		local stalk = basePart("Antenna", Vector3.new(0.12, 1.1, 0.12), center * CFrame.new(0.45, 1.45, 0.2) * CFrame.Angles(0, 0, math.rad(-12)), Color3.fromRGB(90, 96, 110), model)
-		stalk.Material = Enum.Material.Metal
-		weld(head, stalk)
-		local bulb = ell("AntennaTip", Vector3.new(0.34, 0.34, 0.34), center * CFrame.new(0.57, 2.0, 0.2), Color3.fromRGB(255, 70, 70), model)
-		bulb.Material = Enum.Material.Neon
-		weld(head, bulb)
-		local light = Instance.new("PointLight")
-		light.Color = Color3.fromRGB(255, 70, 70)
-		light.Range = 6
-		light.Brightness = 1.5
-		light.Parent = bulb
+		addAntenna(model, head, center)
 	end
 
 	motor("Neck", body, head, CFrame.new(0, 3.3, -0.55))
@@ -244,6 +254,127 @@ local function buildLeg(model: Model, body: BasePart, look: Look, side: number)
 	motor(if side < 0 then "LeftHip" else "RightHip", body, shin, hip)
 end
 
+-- Smooth Blender chicken (assets/models/Chicken.glb) -----------------------------------------
+
+-- Which joint each mesh region rides on, and the name it gets in the rig.
+local MESH_REGIONS: { [string]: { joint: string, name: string } } = {
+	Body = { joint = "Body", name = "Body" },
+	Belly = { joint = "Body", name = "Chest" },
+	Head = { joint = "Head", name = "Head" },
+	EyeWhite = { joint = "Head", name = "Eyes" },
+	Pupil = { joint = "Head", name = "Pupils" },
+	Shine = { joint = "Head", name = "Shine" },
+	LidL = { joint = "Head", name = "LidL" },
+	LidR = { joint = "Head", name = "LidR" },
+	Cheek = { joint = "Head", name = "Cheeks" },
+	Beak = { joint = "Head", name = "Beak" },
+	BeakLower = { joint = "Head", name = "BeakLower" },
+	Comb = { joint = "Head", name = "Comb" },
+	Wattle = { joint = "Head", name = "Wattle" },
+	WingL = { joint = "LeftWing", name = "LeftWing" },
+	WingR = { joint = "RightWing", name = "RightWing" },
+	Tail = { joint = "Tail", name = "Tail" },
+	LegL = { joint = "LeftHip", name = "LeftLeg" },
+	LegR = { joint = "RightHip", name = "RightLeg" },
+}
+
+-- Joint pivots in the Blender chicken's space (feet at y = 0, facing -z).
+local MESH_JOINTS: { [string]: CFrame } = {
+	Head = CFrame.new(0, 3.25, -0.6),
+	LeftWing = CFrame.new(-1.38, 2.95, -0.1),
+	RightWing = CFrame.new(1.38, 2.95, -0.1),
+	Tail = CFrame.new(0, 2.95, 1.45),
+	LeftHip = CFrame.new(-0.62, 1.3, 0.22),
+	RightHip = CFrame.new(0.62, 1.3, 0.22),
+}
+-- The main region of each moving joint (other regions on that joint weld to it).
+local MESH_ANCHOR = { Body = "Body", Head = "Head", LeftWing = "WingL", RightWing = "WingR", Tail = "Tail", LeftHip = "LegL", RightHip = "LegR" }
+
+local function meshColors(look: Look): { [string]: Color3 }
+	local rainbow = look.rainbow
+	return {
+		Body = look.main,
+		Belly = look.belly,
+		Head = look.head,
+		EyeWhite = WHITE,
+		Pupil = if look.style == "Robo" then Color3.fromRGB(80, 220, 255) else BLACK,
+		Shine = WHITE,
+		LidL = look.head,
+		LidR = look.head,
+		Cheek = BLUSH,
+		Beak = look.beak,
+		BeakLower = look.beak:Lerp(BLACK, 0.15),
+		Comb = look.comb or look.beak,
+		Wattle = look.comb or look.beak,
+		WingL = if rainbow then rainbow[2] else look.wing,
+		WingR = if rainbow then rainbow[3] or rainbow[2] else look.wing,
+		Tail = if rainbow then rainbow[1] else look.tail,
+		LegL = look.beak,
+		LegR = look.beak,
+	}
+end
+
+-- Builds the rig from the imported meshes. Returns false if they aren't imported.
+local function buildMeshBody(model: Model, root: BasePart, look: Look): boolean
+	local regions = Meshes.regions("Chicken")
+	local entry = Meshes.manifest("Chicken")
+	if not regions or not entry then
+		return false
+	end
+	local skip: { [string]: boolean } = {}
+	if look.style == "Duck" then
+		skip.Beak, skip.BeakLower, skip.Comb, skip.Wattle = true, true, true, true
+	elseif not look.comb then
+		skip.Comb, skip.Wattle = true, true
+	end
+	local colors = meshColors(look)
+	local parts: { [string]: MeshPart } = {}
+	for key, region in entry.regions do
+		local info = MESH_REGIONS[key]
+		if info and not skip[key] then
+			local part = Meshes.place(regions[key], region, CFrame.new(), 1)
+			part.Name = info.name
+			part.Color = colors[key]
+			part.Anchored = false
+			part.CanCollide = false
+			part.CanTouch = false
+			part.Massless = true
+			part.Parent = model
+			parts[key] = part
+		end
+	end
+	local body = parts.Body
+	motor("Root", root, body, CFrame.new(0, ROOT_Y, 0))
+	for joint, cf in MESH_JOINTS do
+		local anchor = parts[MESH_ANCHOR[joint]]
+		motor(if joint == "Head" then "Neck" else joint, body, anchor, cf)
+	end
+	for key, part in parts do
+		local info = MESH_REGIONS[key]
+		local anchorKey = MESH_ANCHOR[info.joint]
+		if anchorKey ~= key then
+			weld(parts[anchorKey], part)
+		end
+	end
+	for _, key in { "LidL", "LidR" } do
+		parts[key].Transparency = 1
+	end
+	parts.Cheek.Transparency = 0.25
+	if look.style == "Robo" then
+		parts.Pupil.Material = Enum.Material.Neon
+		if parts.Comb then
+			parts.Comb.Material = Enum.Material.Neon
+		end
+	end
+	local headCenter = CFrame.new(0, 3.95, -0.75)
+	if look.style == "Duck" then
+		addBill(model, parts.Head, headCenter, look)
+	elseif look.style == "Robo" then
+		addAntenna(model, parts.Head, headCenter)
+	end
+	return true
+end
+
 local function finish(model: Model, look: Look)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
@@ -279,24 +410,30 @@ function ChickenBuilder.build(skin: Cosmetics.Item): Model
 	root.Massless = false
 	root.CastShadow = false
 
-	-- Plump body, fluffy chest and feathery thighs.
-	local body = ell("Body", Vector3.new(3.0, 2.7, 3.4), CFrame.new(0, 2.55, 0.15), look.main, model)
-	weld(body, ell("Chest", Vector3.new(2.5, 2.35, 1.6), CFrame.new(0, 2.45, -0.75), look.belly, model))
-	weld(body, ell("Back", Vector3.new(2.4, 1.4, 2.4), CFrame.new(0, 3.35, 0.65) * CFrame.Angles(0.25, 0, 0), look.main, model))
-	for _, side in { -1, 1 } do
-		weld(body, ell("Thigh", Vector3.new(1.05, 1.05, 1.25), CFrame.new(side * 0.72, 1.7, 0.25), look.main:Lerp(look.belly, 0.3), model))
+	-- The smooth Blender chicken when its meshes are imported, otherwise one made of parts.
+	local usedMeshes = buildMeshBody(model, root, look)
+	if not usedMeshes then
+		-- Plump body, fluffy chest and feathery thighs.
+		local body = ell("Body", Vector3.new(3.0, 2.7, 3.4), CFrame.new(0, 2.55, 0.15), look.main, model)
+		weld(body, ell("Chest", Vector3.new(2.5, 2.35, 1.6), CFrame.new(0, 2.45, -0.75), look.belly, model))
+		weld(body, ell("Back", Vector3.new(2.4, 1.4, 2.4), CFrame.new(0, 3.35, 0.65) * CFrame.Angles(0.25, 0, 0), look.main, model))
+		for _, side in { -1, 1 } do
+			weld(body, ell("Thigh", Vector3.new(1.05, 1.05, 1.25), CFrame.new(side * 0.72, 1.7, 0.25), look.main:Lerp(look.belly, 0.3), model))
+		end
+		motor("Root", root, body, CFrame.new(0, ROOT_Y, 0))
+
+		buildHead(model, body, look)
+		buildWing(model, body, look, -1)
+		buildWing(model, body, look, 1)
+		buildTail(model, body, look)
+		buildLeg(model, body, look, -1)
+		buildLeg(model, body, look, 1)
 	end
-	motor("Root", root, body, CFrame.new(0, ROOT_Y, 0))
-
-	buildHead(model, body, look)
-	buildWing(model, body, look, -1)
-	buildWing(model, body, look, 1)
-	buildTail(model, body, look)
-	buildLeg(model, body, look, -1)
-	buildLeg(model, body, look, 1)
 	finish(model, look)
+	model:SetAttribute("MeshRig", usedMeshes)
 
-	if look.sparkles then
+	local body = model:FindFirstChild("Body")
+	if look.sparkles and body then
 		local sparkles = Instance.new("Sparkles")
 		sparkles.SparkleColor = look.main:Lerp(WHITE, 0.4)
 		sparkles.Parent = body
@@ -314,13 +451,24 @@ function ChickenBuilder.build(skin: Cosmetics.Item): Model
 	return model
 end
 
--- Builds every chicken skin into `folder` (skipping ones that already exist).
-function ChickenBuilder.buildAll(folder: Instance)
+-- Builds every chicken skin into `folder` (skipping ones that already exist). Part-built
+-- chickens are swapped for the smooth mesh ones once the meshes have been imported.
+-- Returns how many were built.
+function ChickenBuilder.buildAll(folder: Instance): number
+	local upgrade = Meshes.available("Chicken")
+	local count = 0
 	for _, item in Cosmetics.inSlot("ChickenSkin") do
-		if not folder:FindFirstChild(item.id) then
+		local existing = folder:FindFirstChild(item.id)
+		if existing and upgrade and existing:GetAttribute("MeshRig") ~= true then
+			existing:Destroy()
+			existing = nil
+		end
+		if not existing then
 			ChickenBuilder.build(item).Parent = folder
+			count += 1
 		end
 	end
+	return count
 end
 
 return ChickenBuilder

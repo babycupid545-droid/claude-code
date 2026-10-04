@@ -3,4 +3,5 @@ sourcemap.json
 *.rbxlx
 *.rbxl.lock
 *.rbxlx.lock
-/tools/
+__pycache__/
+/tools/preview/.cache/

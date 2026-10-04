@@ -283,6 +283,16 @@ local function islandDecor(kind: string): (Model, CFrame) -> ()
 			Props.hayBale(m, top * CFrame.new(-14, 0, 18), true)
 			Props.hayBale(m, top * CFrame.new(14, 0, 20))
 			Props.fence(m, (top * CFrame.new(-28, 0, 24)).Position, (top * CFrame.new(28, 0, 24)).Position)
+			-- A little crop patch and a mailbox (mesh-only extras).
+			for row = 0, 2 do
+				for col = 0, 4 do
+					Props.mesh("Corn", m, top * CFrame.new(-30 + col * 3, 0, -14 + row * 4), { yaw = Build.rng:NextNumber(0, 6) })
+				end
+			end
+			for i = 0, 3 do
+				Props.mesh("Pumpkin", m, top * CFrame.new(-6 + i * 3.5, 0, 22), { scale = Build.rng:NextNumber(0.8, 1.3), yaw = Build.rng:NextNumber(0, 6) })
+			end
+			Props.mesh("Mailbox", m, top * CFrame.new(20, 0, 22) * CFrame.Angles(0, math.pi, 0))
 			return
 		elseif kind == "bigwindmill" then
 			-- Behind side B.
@@ -291,6 +301,10 @@ local function islandDecor(kind: string): (Model, CFrame) -> ()
 			Props.pineTree(m, top * CFrame.new(-18, 0, 6), 22)
 			Props.flowers(m, top * CFrame.new(0, 0, -16), 10, 30)
 			Props.hayBale(m, top * CFrame.new(10, 0, -14), true)
+			Props.mesh("Nest", m, top * CFrame.new(-12, 0, -12), { scale = 0.6 })
+			for i = 0, 2 do
+				Props.mesh("Pumpkin", m, top * CFrame.new(16 + i * 3, 0, -6), { yaw = Build.rng:NextNumber(0, 6) })
+			end
 			return
 		elseif kind == "barn" then
 			Props.barn(m, top * CFrame.new(0, 0, 4) * CFrame.Angles(0, math.rad(200), 0), 0.9)

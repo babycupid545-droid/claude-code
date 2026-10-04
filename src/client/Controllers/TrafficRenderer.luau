@@ -127,7 +127,7 @@ local function makeCar(car: TrafficSchedule.Car): Model
 	else
 		local options = {}
 		for _, item in Assets.list("Cars") do
-			if item:IsA("Model") and item.Name ~= "RageCar" then
+			if item:IsA("Model") and item.Name ~= "RageCar" and item.Name ~= "Harvester" then
 				table.insert(options, item)
 			end
 		end

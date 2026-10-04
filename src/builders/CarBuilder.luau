@@ -3,6 +3,7 @@
 -- 8 wide x 6 tall x 14 long, pivoted at its center with the front facing -Z.
 
 local Build = require(script.Parent.Build)
+local Meshes = require(script.Parent.Meshes)
 local Palette = require(script.Parent.Palette)
 
 local CarBuilder = {}
@@ -318,7 +319,121 @@ local function rageCar(): Model
 	return m
 end
 
+-- Smooth Blender vehicles (assets/models/Vehicles.glb) ----------------------------------------
+
+local REGION_COLORS: { [string]: Color3 } = {
+	Glass = GLASS,
+	Tire = TIRE,
+	Rim = HUB,
+	Light = Color3.fromRGB(255, 250, 210),
+	Tail = Color3.fromRGB(255, 50, 50),
+	Trim = BUMPER,
+	Stripe = Color3.fromRGB(255, 255, 255),
+	Hay = Color3.fromRGB(240, 202, 96),
+	Rack = BUMPER,
+	Cone = Color3.fromRGB(220, 170, 100),
+	Scoop = Color3.fromRGB(255, 170, 200),
+	Cherry = Color3.fromRGB(230, 40, 60),
+	Roof = Color3.fromRGB(250, 240, 220),
+	Seat = Color3.fromRGB(240, 200, 60),
+	Sign = Color3.fromRGB(255, 250, 220),
+	Checker = Color3.fromRGB(30, 30, 30),
+	Chrome = Color3.fromRGB(210, 214, 222),
+	Flame = Color3.fromRGB(255, 120, 30),
+	Brow = Color3.fromRGB(255, 40, 40),
+	Reel = Color3.fromRGB(220, 60, 50),
+	Pipe = Color3.fromRGB(90, 150, 70),
+	Beacon = Color3.fromRGB(255, 160, 30),
+}
+local NEON: { [string]: boolean } = { Light = true, Tail = true, Sign = true, Beacon = true, Flame = true, Brow = true }
+-- Region -> part name the game looks for (headlights get SpotLights at night).
+local RENAME: { [string]: string } = { Light = "Headlight", Tail = "Taillight" }
+
+type MeshCar = { name: string, asset: string, body: Color3, height: number? }
+local MESH_CARS: { MeshCar } = {
+	{ name = "Sedan", asset = "Sedan", body = Color3.fromRGB(60, 130, 230) },
+	{ name = "SedanRed", asset = "Sedan", body = Color3.fromRGB(225, 60, 55) },
+	{ name = "SedanMint", asset = "Sedan", body = Color3.fromRGB(120, 220, 190) },
+	{ name = "Taxi", asset = "Taxi", body = Color3.fromRGB(255, 205, 40) },
+	{ name = "Hatchback", asset = "Hatchback", body = Color3.fromRGB(110, 200, 120) },
+	{ name = "HatchbackOrange", asset = "Hatchback", body = Color3.fromRGB(255, 150, 60) },
+	{ name = "SportsCar", asset = "SportsCar", body = Color3.fromRGB(150, 80, 230) },
+	{ name = "SportsCarRed", asset = "SportsCar", body = Color3.fromRGB(235, 40, 50) },
+	{ name = "Pickup", asset = "Pickup", body = Color3.fromRGB(240, 120, 40) },
+	{ name = "PickupBlue", asset = "Pickup", body = Color3.fromRGB(70, 110, 200) },
+	{ name = "Van", asset = "Van", body = Color3.fromRGB(245, 245, 240) },
+	{ name = "IceCreamVan", asset = "IceCreamVan", body = Color3.fromRGB(255, 160, 200) },
+	{ name = "Tractor", asset = "Tractor", body = Color3.fromRGB(70, 170, 70) },
+	{ name = "RageCar", asset = "RageCar", body = Color3.fromRGB(30, 26, 36) },
+	-- Sweeps the median; pivot height matches Config.Median.HarvesterHeight (9).
+	{ name = "Harvester", asset = "Harvester", body = Color3.fromRGB(80, 160, 70), height = 9 },
+}
+
+local function meshCar(spec: MeshCar): Model?
+	local colors = table.clone(REGION_COLORS)
+	colors.Body = spec.body
+	local materials: { [string]: Enum.Material } = { Glass = Enum.Material.Glass, Rim = Enum.Material.Metal, Chrome = Enum.Material.Metal }
+	for key in NEON do
+		materials[key] = Enum.Material.Neon
+	end
+	-- Car pivots are at the centre of an H-tall box, so the wheels sit H/2 below it.
+	local m = Meshes.build(spec.asset, { colors = colors, materials = materials, origin = CFrame.new(0, -(spec.height or H) / 2, 0) })
+	if not m then
+		return nil
+	end
+	m.Name = spec.name
+	for _, d in m:GetChildren() do
+		if d:IsA("BasePart") then
+			local rename = RENAME[d.Name]
+			if d.Name == "Glass" then
+				d.Transparency = 0.15
+			elseif d.Name == "Body" then
+				d.Material = Enum.Material.SmoothPlastic
+			end
+			if rename then
+				d.Name = rename
+			end
+		end
+	end
+	if spec.name == "RageCar" then
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 60, 40)
+		light.Range = 14
+		light.Brightness = 2
+		light.Parent = m:FindFirstChild("Body")
+	end
+	m:SetAttribute("MeshCar", true)
+	return m
+end
+
+-- True when the vehicle meshes are imported but `folder` still holds part-built cars.
+function CarBuilder.needsUpgrade(folder: Instance): boolean
+	if not Meshes.available("Sedan") then
+		return false
+	end
+	for _, car in folder:GetChildren() do
+		if car:GetAttribute("MeshCar") ~= true then
+			return true
+		end
+	end
+	return #folder:GetChildren() == 0
+end
+
 function CarBuilder.build(folder: Instance)
+	if Meshes.available("Sedan") then
+		folder:ClearAllChildren()
+		for _, spec in MESH_CARS do
+			local car = meshCar(spec)
+			if car then
+				finish(car)
+				car:SetAttribute("MeshCar", true)
+				car.Parent = folder
+			end
+		end
+		if #folder:GetChildren() > 0 then
+			return
+		end
+	end
 	local cars = {
 		sedan("Sedan", Color3.fromRGB(60, 130, 230)),
 		sedan("SedanRed", Color3.fromRGB(225, 60, 55)),

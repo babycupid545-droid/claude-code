@@ -1,8 +1,12 @@
 --!strict
 -- Low-poly farm props: trees, rocks, bushes, hay bales, fences, barns, silos, windmills,
 -- clouds, street lamps and floating islands.
+--
+-- Each prop uses the smooth Blender mesh (assets/models/Props.glb) when it has been imported
+-- into ReplicatedStorage.Assets.Meshes, and falls back to a part-built version otherwise.
 
 local Build = require(script.Parent.Build)
+local Meshes = require(script.Parent.Meshes)
 local Palette = require(script.Parent.Palette)
 
 local Props = {}
@@ -11,7 +15,105 @@ local rng = function(): Random
 	return Build.rng
 end
 
+local rgb = Color3.fromRGB
+
+-- Mesh region colour keys (see tools/blender/props.py) -> palette colours.
+local REGION_COLORS: { [string]: Color3 } = {
+	Trunk = Palette.Trunk,
+	Leaf = Palette.Leaf,
+	Pine = Palette.Pine,
+	Bush = Palette.Bush,
+	Berry = rgb(230, 60, 80),
+	Rock = Palette.Rock,
+	Stem = Palette.Grass,
+	Petal = Palette.Flowers[1],
+	Center = Palette.Flowers[2],
+	Grass = Palette.Grass,
+	Hay = Palette.Hay,
+	HayBand = Palette.HayDark,
+	Wood = Palette.Wood,
+	Red = Palette.BarnRed,
+	Roof = Palette.Roof,
+	White = Palette.Trim,
+	Dark = Palette.BarnDark,
+	Metal = Palette.Metal,
+	Band = Palette.MetalDark,
+	Plaster = Palette.Plaster,
+	Sail = Palette.Sail,
+	Window = Palette.Window,
+	Door = Palette.BarnDark,
+	Brick = Palette.Brick,
+	Glow = Palette.LampGlow,
+	Cloud = Palette.Cloud,
+	Dirt = Palette.Dirt,
+	Stalk = rgb(120, 170, 70),
+	Cob = rgb(250, 210, 80),
+	Pumpkin = rgb(240, 130, 40),
+	Flag = Palette.CurbRed,
+	Straw = Palette.Straw,
+	Egg = rgb(255, 250, 235),
+	Gold = rgb(255, 200, 60),
+	Stone = rgb(200, 196, 190),
+}
+local REGION_MATERIALS: { [string]: Enum.Material } = {
+	Window = Enum.Material.Glass,
+	Glow = Enum.Material.Neon,
+	Metal = Enum.Material.Metal,
+	Band = Enum.Material.Metal,
+	Gold = Enum.Material.Foil,
+}
+-- Small props don't need precise collision.
+local SIMPLE_COLLISION = {
+	Bush = true, Flower = true, GrassTuft = true, Cloud1 = true, Cloud2 = true, Corn = true, Pumpkin = true,
+	TreeRound = true, TreeRound2 = true, TreePine = true, Rock1 = true, Rock2 = true, Rock3 = true,
+}
+
+export type MeshOptions = { scale: number?, height: number?, colors: { [string]: Color3 }?, yaw: number?, name: string? }
+
+-- Places the Blender mesh `asset` with its base-centre at `base`. `height` scales it to that
+-- height; `scale` multiplies the authored size. Returns nil if the mesh isn't imported.
+function Props.mesh(asset: string, parent: Instance, base: CFrame, opts: MeshOptions?): Model?
+	local o: MeshOptions = opts or {}
+	local entry = Meshes.manifest(asset)
+	if not entry or not Meshes.available(asset) then
+		return nil
+	end
+	local scale = o.scale or 1
+	if o.height then
+		scale = o.height / entry.size.Y
+	end
+	local colors = table.clone(REGION_COLORS)
+	if o.colors then
+		for key, color in o.colors do
+			colors[key] = color
+		end
+	end
+	local origin = base * CFrame.Angles(0, o.yaw or 0, 0)
+	local m = Meshes.build(asset, { colors = colors, materials = REGION_MATERIALS, origin = origin, scale = scale })
+	if not m then
+		return nil
+	end
+	m.Name = o.name or asset
+	m.WorldPivot = origin
+	for _, d in m:GetChildren() do
+		if d:IsA("MeshPart") then
+			if SIMPLE_COLLISION[asset] then
+				d.CanCollide = false
+			end
+			pcall(function()
+				d.CollisionFidelity = Enum.CollisionFidelity.Hull
+			end)
+		end
+	end
+	m.Parent = parent
+	return m
+end
+
 function Props.pineTree(parent: Instance, base: CFrame, height: number): Model
+	local mesh = Props.mesh("TreePine", parent, base, { height = height, yaw = rng():NextNumber(0, math.pi * 2), name = "PineTree", colors = { Pine = Build.vary(Palette.Pine, 0.04) } })
+	if mesh then
+		return mesh
+	end
 	local m = Build.model("PineTree", parent)
 	local trunkH = height * 0.25
 	Build.cylinder(base * CFrame.new(0, trunkH / 2, 0), trunkH, height * 0.12, {
@@ -37,6 +139,16 @@ function Props.pineTree(parent: Instance, base: CFrame, height: number): Model
 end
 
 function Props.roundTree(parent: Instance, base: CFrame, height: number): Model
+	local autumn = rng():NextNumber() < 0.25
+	local mesh = Props.mesh(if rng():NextNumber() < 0.5 then "TreeRound" else "TreeRound2", parent, base, {
+		height = height,
+		yaw = rng():NextNumber(0, math.pi * 2),
+		name = "RoundTree",
+		colors = { Leaf = Build.vary(if autumn then Palette.LeafAutumn else Palette.Leaf, 0.04) },
+	})
+	if mesh then
+		return mesh
+	end
 	local m = Build.model("RoundTree", parent)
 	local trunkH = height * 0.45
 	Build.part({
@@ -57,12 +169,28 @@ function Props.roundTree(parent: Instance, base: CFrame, height: number): Model
 end
 
 function Props.rock(parent: Instance, cf: CFrame, size: number): Model
+	local kind = `Rock{rng():NextInteger(1, 3)}`
+	local entry = Meshes.manifest(kind)
+	if entry then
+		local mesh = Props.mesh(kind, parent, cf * CFrame.new(0, -size * 0.3, 0), { scale = size / entry.size.X, yaw = rng():NextNumber(0, math.pi * 2), name = "Rock" })
+		if mesh then
+			return mesh
+		end
+	end
 	local m = Build.model("Rock", parent)
 	Build.gem(m, cf, Vector3.new(size, size * 0.7, size * 0.9), Palette.Rock)
 	return m
 end
 
 function Props.bush(parent: Instance, cf: CFrame, size: number): Model
+	local entry = Meshes.manifest("Bush")
+	if entry then
+		local berries = if rng():NextNumber() < 0.5 then Palette.Flowers[rng():NextInteger(1, #Palette.Flowers)] else Palette.Bush
+		local mesh = Props.mesh("Bush", parent, cf, { scale = size / entry.size.X * 1.2, yaw = rng():NextNumber(0, math.pi * 2), colors = { Berry = berries, Bush = Build.vary(Palette.Bush, 0.04) } })
+		if mesh then
+			return mesh
+		end
+	end
 	local m = Build.model("Bush", parent)
 	Build.gem(m, cf * CFrame.new(0, size * 0.3, 0), Vector3.new(size, size * 0.7, size), Palette.Bush)
 	if rng():NextNumber() < 0.5 then
@@ -78,6 +206,17 @@ function Props.bush(parent: Instance, cf: CFrame, size: number): Model
 end
 
 function Props.flowers(parent: Instance, cf: CFrame, spread: number, count: number)
+	if Meshes.available("Flower") then
+		for _ = 1, count do
+			local c = cf * CFrame.new(rng():NextNumber(-spread, spread), 0, rng():NextNumber(-spread, spread))
+			Props.mesh("Flower", parent, c, {
+				scale = rng():NextNumber(0.7, 1.0),
+				yaw = rng():NextNumber(0, math.pi * 2),
+				colors = { Petal = Palette.Flowers[rng():NextInteger(1, #Palette.Flowers)] },
+			})
+		end
+		return
+	end
 	for _ = 1, count do
 		local c = cf * CFrame.new(rng():NextNumber(-spread, spread), 0, rng():NextNumber(-spread, spread))
 		Build.part({
@@ -96,6 +235,10 @@ function Props.flowers(parent: Instance, cf: CFrame, spread: number, count: numb
 end
 
 function Props.grassTuft(parent: Instance, cf: CFrame)
+	local mesh = Props.mesh("GrassTuft", parent, cf, { scale = rng():NextNumber(0.8, 1.2), yaw = rng():NextNumber(0, math.pi * 2), name = "Tuft", colors = { Grass = Build.vary(Palette.Grass, 0.05) } })
+	if mesh then
+		return
+	end
 	for i = 1, 3 do
 		Build.wedge({
 			Name = "Tuft",
@@ -128,6 +271,10 @@ function Props.barnGate(parent: Instance, base: CFrame, width: number): Model
 end
 
 function Props.hayBale(parent: Instance, cf: CFrame, round: boolean?): Model
+	local mesh = Props.mesh(if round then "HayRoll" else "HayBale", parent, cf, { name = "HayBale" })
+	if mesh then
+		return mesh
+	end
 	local m = Build.model("HayBale", parent)
 	if round then
 		local p = Build.part({ Color = Palette.Hay, Parent = m })
@@ -145,6 +292,18 @@ function Props.hayBale(parent: Instance, cf: CFrame, round: boolean?): Model
 end
 
 function Props.fence(parent: Instance, from: Vector3, to: Vector3, color: Color3?): Model
+	if Meshes.available("Fence") then
+		local m = Build.model("Fence", parent)
+		local length = (to - from).Magnitude
+		local count = math.max(1, math.floor(length / 8 + 0.5))
+		local seg = length / count
+		local cf = CFrame.lookAt(from, to)
+		for i = 1, count do
+			local base = cf * CFrame.new(0, -0.1, -(i - 0.5) * seg) * CFrame.Angles(0, math.pi / 2, 0)
+			Props.mesh("Fence", m, base, { scale = seg / 8.6, colors = { Wood = Build.vary(color or Palette.Wood, 0.02) } })
+		end
+		return m
+	end
 	local m = Build.model("Fence", parent)
 	local c = color or Palette.Wood
 	local dir = to - from
@@ -168,6 +327,10 @@ function Props.fence(parent: Instance, from: Vector3, to: Vector3, color: Color3
 end
 
 function Props.barn(parent: Instance, base: CFrame, scale: number?): Model
+	local mesh = Props.mesh("Barn", parent, base, { scale = scale or 1 })
+	if mesh then
+		return mesh
+	end
 	local s = scale or 1
 	local m = Build.model("Barn", parent)
 	local w, d, h = 22 * s, 28 * s, 14 * s
@@ -220,6 +383,10 @@ function Props.barn(parent: Instance, base: CFrame, scale: number?): Model
 end
 
 function Props.silo(parent: Instance, base: CFrame, height: number): Model
+	local mesh = Props.mesh("Silo", parent, base, { height = height * 1.16 })
+	if mesh then
+		return mesh
+	end
 	local m = Build.model("Silo", parent)
 	local dia = height * 0.32
 	Build.cylinder(base * CFrame.new(0, height / 2, 0), height, dia, { Color = Palette.Metal, Material = Enum.Material.Metal, Parent = m })
@@ -231,6 +398,19 @@ function Props.silo(parent: Instance, base: CFrame, height: number): Model
 end
 
 function Props.windmill(parent: Instance, base: CFrame, height: number): Model
+	-- Mesh tower is 24 studs to the cap; the blades hub sits at (0, 25, -5.5).
+	local tower = Props.mesh("Windmill", parent, base, { scale = height / 24 })
+	if tower then
+		local s = height / 24
+		local hub = base * CFrame.new(0, 25 * s, -5.6 * s)
+		local blades = Props.mesh("WindmillBlades", tower, hub, { scale = s, name = "Blades" })
+		if blades then
+			blades.WorldPivot = hub
+			Build.tag(blades, "Spin")
+			blades:SetAttribute("SpinSpeed", 0.8)
+		end
+		return tower
+	end
 	local m = Build.model("Windmill", parent)
 	-- Tapered tower from stacked, shrinking blocks.
 	local steps = 5
@@ -269,6 +449,10 @@ function Props.windmill(parent: Instance, base: CFrame, height: number): Model
 end
 
 function Props.farmhouse(parent: Instance, base: CFrame): Model
+	local mesh = Props.mesh("Farmhouse", parent, base)
+	if mesh then
+		return mesh
+	end
 	local m = Build.model("Farmhouse", parent)
 	local w, d, h = 16, 12, 9
 	Build.part({ Size = Vector3.new(w, h, d), CFrame = base * CFrame.new(0, h / 2, 0), Color = Palette.Plaster, Parent = m })
@@ -291,6 +475,18 @@ function Props.farmhouse(parent: Instance, base: CFrame): Model
 end
 
 function Props.lamp(parent: Instance, base: CFrame): Model
+	local mesh = Props.mesh("Lamp", parent, base)
+	if mesh then
+		local glow = mesh:FindFirstChild("Glow")
+		if glow then
+			local light = Instance.new("PointLight")
+			light.Range = 18
+			light.Brightness = 0.8
+			light.Color = Palette.LampGlow
+			light.Parent = glow
+		end
+		return mesh
+	end
 	local m = Build.model("Lamp", parent)
 	Build.cylinder(base * CFrame.new(0, 6, 0), 12, 0.6, { Color = Palette.MetalDark, Parent = m })
 	Build.part({ Size = Vector3.new(0.5, 0.5, 3), CFrame = base * CFrame.new(0, 12, -1.3), Color = Palette.MetalDark, Parent = m })
@@ -310,6 +506,22 @@ function Props.lamp(parent: Instance, base: CFrame): Model
 end
 
 function Props.cloud(parent: Instance, cf: CFrame, size: number): Model
+	local kind = if rng():NextNumber() < 0.5 then "Cloud1" else "Cloud2"
+	local entry = Meshes.manifest(kind)
+	if entry then
+		local mesh = Props.mesh(kind, parent, cf, { scale = size / entry.size.X * 1.4, yaw = rng():NextNumber(-0.4, 0.4), name = "Cloud" })
+		if mesh then
+			for _, d in mesh:GetChildren() do
+				if d:IsA("BasePart") then
+					d.CastShadow = false
+					d.CanCollide = false
+					d.Material = Enum.Material.SmoothPlastic
+				end
+			end
+			Build.tag(mesh, "Drift")
+			return mesh
+		end
+	end
 	local m = Build.model("Cloud", parent)
 	-- A flat base with smaller puffs stacked on top reads as a cartoon cloud.
 	for i = 1, 7 do
@@ -357,6 +569,14 @@ end
 
 -- A small floating island with a grassy top and some props.
 function Props.floatingIsland(parent: Instance, cf: CFrame, radius: number, decorate: ((Model, CFrame) -> ())?): Model
+	local mesh = Props.mesh("Island", parent, cf, { scale = radius / 10, yaw = rng():NextNumber(0, math.pi * 2), name = "FloatingIsland" })
+	if mesh then
+		if decorate then
+			decorate(mesh, cf)
+		end
+		Build.tag(mesh, "Bob")
+		return mesh
+	end
 	local m = Build.model("FloatingIsland", parent)
 	Build.part({ Size = Vector3.new(radius * 2, 2, radius * 2), CFrame = cf * CFrame.new(0, -1, 0), Color = Palette.Grass, Parent = m })
 	Build.part({ Size = Vector3.new(radius * 2.05, 1.2, radius * 2.05), CFrame = cf * CFrame.new(0, -2.4, 0), Color = Palette.Dirt, Parent = m })

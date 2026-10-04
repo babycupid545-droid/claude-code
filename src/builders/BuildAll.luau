@@ -74,14 +74,12 @@ return function()
 		WorldBuilder.buildLobby(workspace)
 	end)
 	local cars = assetsFolder("Cars")
-	step("Cars", #cars:GetChildren() > 0, function()
+	step("Cars", #cars:GetChildren() > 0 and not CarBuilder.needsUpgrade(cars), function()
 		CarBuilder.build(cars)
 	end)
 	-- One chicken per skin; builds any that are missing.
 	local chickens = assetsFolder("Chickens")
-	local before = #chickens:GetChildren()
-	ChickenBuilder.buildAll(chickens)
-	if #chickens:GetChildren() > before then
+	if ChickenBuilder.buildAll(chickens) > 0 then
 		table.insert(built, "Chickens")
 	else
 		print("[Build] Chickens: already exist, skipped (delete one to rebuild it)")
