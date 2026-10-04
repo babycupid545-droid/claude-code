@@ -3,6 +3,7 @@
 
 local Controllers = script.Controllers
 
+require(script.AudioCheck).run()
 require(script.Sprites).start()
 require(script.Anim).start()
 require(script.CameraFx).start()
