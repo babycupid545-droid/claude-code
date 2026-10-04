@@ -1,6 +1,7 @@
 """Builds every Blender asset, trims it to a mobile-friendly triangle budget, and writes:
 
   assets/models/Chicken.glb   assets/models/Vehicles.glb   assets/models/Props.glb
+  (plus .fbx copies, for Studio versions whose importer doesn't take .glb)
   src/builders/MeshManifest.luau   (authored centre + size of every mesh, in studs)
   docs/previews/blender_*.jpg      (optional, with --previews)
 
@@ -178,6 +179,7 @@ def main():
 
     objs, entries = collect("Chicken", chicken, chick_col)
     export_glb(os.path.join(OUT, "Chicken.glb"), objs)
+    C.export_fbx(os.path.join(OUT, "Chicken.fbx"), objs)
     dump(objs)
     all_entries.append(("Chicken.glb", entries))
     print("Chicken tris:", sum(C.tri_count(o) for o in objs))
@@ -194,6 +196,7 @@ def main():
 
     objs, entries = collect("_vehicle", vehicles, car_col)
     export_glb(os.path.join(OUT, "Vehicles.glb"), objs)
+    C.export_fbx(os.path.join(OUT, "Vehicles.fbx"), objs)
     dump(objs)
     all_entries.append(("Vehicles.glb", entries))
     print("Vehicle tris:", sum(C.tri_count(o) for o in objs))
@@ -203,6 +206,7 @@ def main():
 
     objs, entries = collect("_prop", props, prop_col)
     export_glb(os.path.join(OUT, "Props.glb"), objs)
+    C.export_fbx(os.path.join(OUT, "Props.fbx"), objs)
     dump(objs)
     all_entries.append(("Props.glb", entries))
     print("Prop tris:", sum(C.tri_count(o) for o in objs))
