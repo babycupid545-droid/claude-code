@@ -59,7 +59,7 @@ elseif what == "lobby" then
 	mod("WorldBuilder").buildLobby(root)
 elseif what == "chickens" or what == "chicken" then
 	mod("ChickenBuilder").buildAll(root)
-elseif what == "pose" then
+elseif what == "pose" or what == "glide" or what == "shoot" then
 	-- Classic chicken posed mid-stride with wings up and head pecking, to check joint directions.
 	local cosm = mockRequire(shared:FindFirstChild("Cosmetics"))
 	local m = mod("ChickenBuilder").build(cosm.get("Classic"))
@@ -69,6 +69,21 @@ elseif what == "pose" then
 		LeftHip = CFrame.Angles(0.8, 0, 0), RightHip = CFrame.Angles(-0.8, 0, 0),
 		Neck = CFrame.new(0, -0.15, -0.25) * CFrame.Angles(-0.7, 0.4, 0), Tail = CFrame.Angles(0, 0.3, 0),
 	}
+	-- Same numbers as ChickenAnimator at glide = 1 / shoot = 1.
+	if what == "glide" then
+		poses = {
+			Root = CFrame.Angles(-0.35, 0, 0),
+			LeftWing = CFrame.Angles(-0.25, 0, -1.25), RightWing = CFrame.Angles(-0.25, 0, 1.25),
+			LeftHip = CFrame.Angles(-0.9, 0, 0), RightHip = CFrame.Angles(-0.9, 0, 0),
+			Neck = CFrame.new(0, 0, 0.15) * CFrame.Angles(0.3, 0, 0), Tail = CFrame.Angles(0.05, 0, 0),
+		}
+	elseif what == "shoot" then
+		poses = {
+			Root = CFrame.new(0, -0.22, 0) * CFrame.Angles(-0.2, 0, 0),
+			LeftWing = CFrame.Angles(0, 0, -0.7), RightWing = CFrame.Angles(0, 0, 0.7),
+			Neck = CFrame.Angles(-0.2, 0.6, 0.1), Tail = CFrame.Angles(-0.9, 0, 0),
+		}
+	end
 	-- Welded decorations follow their Part0.
 	local welds = {}
 	for _, d in m:GetDescendants() do
@@ -76,9 +91,12 @@ elseif what == "pose" then
 			table.insert(welds, { d.Part0, d.Part1, d.Part0.CFrame:Inverse() * d.Part1.CFrame })
 		end
 	end
-	for _, d in m:GetDescendants() do
-		if d.ClassName == "Motor6D" and poses[d.Name] then
-			d.Part1.CFrame = d.Part0.CFrame * d.C0 * poses[d.Name] * d.C1:Inverse()
+	-- Root first: every other joint hangs off the body.
+	for pass = 1, 2 do
+		for _, d in m:GetDescendants() do
+			if d.ClassName == "Motor6D" and poses[d.Name] and ((d.Name == "Root") == (pass == 1)) then
+				d.Part1.CFrame = d.Part0.CFrame * d.C0 * poses[d.Name] * d.C1:Inverse()
+			end
 		end
 	end
 	for _, w in welds do
@@ -323,6 +341,8 @@ VIEWS = {
     "arena": [((-210, 140, -300), (0, -10, 0)), ((0, 76, -173), (0, 0, 10)), ((-60, 9, -95), (10, 2, 0))],
     "lobby": [((40, 105, -70), (0, 72, -150))],
     "pose": [((-6, 4.5, -8), (0, 2.8, 0)), ((9, 3.5, 0), (0, 2.8, 0))],
+    "glide": [((-7, 6, -8), (0, 2.8, 0)), ((10, 3.5, 0), (0, 2.8, 0))],
+    "shoot": [((9, 3.5, 2), (0, 2.8, 0))],
     "chickens": [((-12, 14, -30), (0, 3, 4))],
     "chicken": [((-5, 4.5, -9), (0, 2.8, 0)), ((8, 4, 5), (0, 2.8, 0)), ((0, 3.2, -11), (0, 3, 0))],
 }

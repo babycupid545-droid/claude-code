@@ -92,6 +92,58 @@ local function makeDefaultCar(kind: number): Model
 	return model
 end
 
+-- A puff of exhaust (and road dust) streaming off the back; harvesters spit out straw.
+local function addExhaust(model: Model, car: TrafficSchedule.Car)
+	local length = car.length or T.CarLength
+	local height = car.height or T.CarHeight
+	local holder = Instance.new("Part")
+	holder.Name = "FxHolder"
+	holder.Transparency = 1
+	holder.Size = Vector3.one * 0.2
+	holder.CanCollide = false
+	holder.CanQuery = false
+	holder.CanTouch = false
+	holder.Anchored = true
+	holder.CFrame = model:GetPivot() * CFrame.new(0, -height / 2 + 0.6, length / 2)
+	holder.Parent = model
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = holder
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Name = "Exhaust"
+	smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	smoke.EmissionDirection = Enum.NormalId.Back
+	smoke.Rate = if car.vehicle == "Harvester" then 30 else 22
+	smoke.Lifetime = NumberRange.new(0.5, 0.9)
+	smoke.Speed = NumberRange.new(3, 6)
+	smoke.SpreadAngle = Vector2.new(25, 25)
+	smoke.Drag = 3
+	smoke.Acceleration = Vector3.new(0, 4, 0)
+	smoke.Rotation = NumberRange.new(0, 360)
+	smoke.RotSpeed = NumberRange.new(-60, 60)
+	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 3.2) })
+	smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+	smoke.Color = ColorSequence.new(Color3.fromRGB(215, 210, 205), Color3.fromRGB(170, 165, 160))
+	smoke.Parent = attachment
+	if car.vehicle == "Harvester" then
+		local straw = Instance.new("ParticleEmitter")
+		straw.Name = "Straw"
+		straw.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		straw.EmissionDirection = Enum.NormalId.Top
+		straw.Rate = 60
+		straw.Lifetime = NumberRange.new(0.8, 1.4)
+		straw.Speed = NumberRange.new(10, 20)
+		straw.SpreadAngle = Vector2.new(50, 50)
+		straw.Acceleration = Vector3.new(0, -40, 0)
+		straw.Rotation = NumberRange.new(0, 360)
+		straw.RotSpeed = NumberRange.new(-300, 300)
+		straw.Size = NumberSequence.new(0.6)
+		straw.Color = ColorSequence.new(Color3.fromRGB(250, 214, 100), Color3.fromRGB(214, 160, 60))
+		straw.LightEmission = 0.2
+		straw.Parent = attachment
+	end
+	-- It's part of the model, so PivotTo carries it along with the car.
+end
+
 local function makeCar(car: TrafficSchedule.Car): Model
 	local model: Model
 	if car.vehicle == "Harvester" then
@@ -139,6 +191,7 @@ local function makeCar(car: TrafficSchedule.Car): Model
 	end
 	model.Name = car.id
 	noCollide(model)
+	addExhaust(model, car)
 	model.Parent = folder
 	local body = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
 	if body then

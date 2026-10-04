@@ -1,6 +1,7 @@
 --!strict
--- Bright, warm, cartoony lighting: soft shadows, light haze for depth, gentle bloom and a
--- little extra saturation. Low-poly builds live or die by their lighting.
+-- Warm late-afternoon farm lighting: a golden sun with soft shadows, sky-blue fill, haze for
+-- depth, bloom on neon/headlights, a touch of far blur, and punchy cartoon colour grading.
+-- Re-running the build command re-applies all of this (it never skips lighting).
 
 local Lighting = game:GetService("Lighting")
 
@@ -25,24 +26,27 @@ function LightingBuilder.build()
 	pcall(function()
 		(Lighting :: any).Technology = Enum.Technology.Future
 	end)
-	Lighting.ClockTime = 14.6
-	Lighting.GeographicLatitude = 35
-	Lighting.Brightness = 3
-	Lighting.Ambient = Color3.fromRGB(96, 92, 120)
-	Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 175)
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.4
+	Lighting.ClockTime = 15.4
+	Lighting.GeographicLatitude = 28
+	Lighting.Brightness = 3.4
+	-- Warm sunlit tops, cool sky-blue shadows: the classic cartoon look.
+	Lighting.ColorShift_Top = Color3.fromRGB(255, 226, 180)
+	Lighting.ColorShift_Bottom = Color3.fromRGB(120, 150, 210)
+	Lighting.Ambient = Color3.fromRGB(100, 96, 128)
+	Lighting.OutdoorAmbient = Color3.fromRGB(150, 160, 190)
+	Lighting.EnvironmentDiffuseScale = 0.75
+	Lighting.EnvironmentSpecularScale = 0.5
 	Lighting.GlobalShadows = true
-	Lighting.ShadowSoftness = 0.25
-	Lighting.ExposureCompensation = 0.1
+	Lighting.ShadowSoftness = 0.2
+	Lighting.ExposureCompensation = 0.15
 
 	local atmosphere = ensure("Atmosphere", "Atmosphere") :: Atmosphere
-	atmosphere.Density = 0.32
-	atmosphere.Offset = 0.15
-	atmosphere.Color = Color3.fromRGB(205, 225, 255)
-	atmosphere.Decay = Color3.fromRGB(120, 150, 210)
-	atmosphere.Glare = 0.4
-	atmosphere.Haze = 1.2
+	atmosphere.Density = 0.3
+	atmosphere.Offset = 0.2
+	atmosphere.Color = Color3.fromRGB(214, 228, 255)
+	atmosphere.Decay = Color3.fromRGB(255, 196, 150)
+	atmosphere.Glare = 0.8
+	atmosphere.Haze = 1.6
 
 	local sky = ensure("Sky", "Sky") :: Sky
 	sky.SunAngularSize = 14
@@ -50,19 +54,26 @@ function LightingBuilder.build()
 	sky.CelestialBodiesShown = true
 
 	local bloom = ensure("BloomEffect", "Bloom") :: BloomEffect
-	bloom.Intensity = 0.5
-	bloom.Size = 28
-	bloom.Threshold = 1.4
+	bloom.Intensity = 0.65
+	bloom.Size = 30
+	bloom.Threshold = 1.25
 
 	local color = ensure("ColorCorrectionEffect", "ColorCorrection") :: ColorCorrectionEffect
-	color.Saturation = 0.18
-	color.Contrast = 0.08
+	color.Saturation = 0.22
+	color.Contrast = 0.1
 	color.Brightness = 0.02
-	color.TintColor = Color3.fromRGB(255, 250, 242)
+	color.TintColor = Color3.fromRGB(255, 248, 236)
 
 	local rays = ensure("SunRaysEffect", "SunRays") :: SunRaysEffect
-	rays.Intensity = 0.05
-	rays.Spread = 0.7
+	rays.Intensity = 0.08
+	rays.Spread = 0.75
+
+	-- Only the far scenery softens; the road and chickens stay crisp.
+	local dof = ensure("DepthOfFieldEffect", "DepthOfField") :: DepthOfFieldEffect
+	dof.FarIntensity = 0.12
+	dof.FocusDistance = 140
+	dof.InFocusRadius = 160
+	dof.NearIntensity = 0
 
 	-- Soft 3D clouds around the islands.
 	local terrain = workspace:FindFirstChildOfClass("Terrain")

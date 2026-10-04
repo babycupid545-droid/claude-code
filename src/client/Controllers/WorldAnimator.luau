@@ -27,12 +27,79 @@ type TileInfo = {
 local tileInfo: { [BasePart]: TileInfo } = {}
 local lastAlarm = 0
 local lastCrumble = 0
+local debrisThisFrame = 0
 
 local function nearLocalPlayer(part: BasePart, radius: number): boolean
 	local character = Players.LocalPlayer.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	return root ~= nil and (root.Position - part.Position).Magnitude < radius
 end
+
+-- One dust emitter, moved to each crumbling tile and burst there.
+local dustPart: Part? = nil
+local dustEmitter: ParticleEmitter? = nil
+
+local function crumbleDust(position: Vector3, size: Vector3)
+	if not dustPart or not dustPart.Parent then
+		local p = Instance.new("Part")
+		p.Name = "CrumbleDust"
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Transparency = 1
+		p.Parent = workspace
+		local e = Instance.new("ParticleEmitter")
+		e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		e.Shape = Enum.ParticleEmitterShape.Box
+		e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		e.Color = ColorSequence.new(Color3.fromRGB(225, 214, 196), Color3.fromRGB(170, 150, 130))
+		e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 5) })
+		e.Lifetime = NumberRange.new(0.8, 1.4)
+		e.Speed = NumberRange.new(2, 6)
+		e.SpreadAngle = Vector2.new(180, 180)
+		e.Drag = 2
+		e.Acceleration = Vector3.new(0, 2, 0)
+		e.Rotation = NumberRange.new(0, 360)
+		e.RotSpeed = NumberRange.new(-40, 40)
+		e.Rate = 0
+		e.Parent = p
+		dustPart, dustEmitter = p, e
+	end
+	local p = dustPart :: Part
+	p.Size = size
+	p.CFrame = CFrame.new(position)
+	local emitter = dustEmitter :: ParticleEmitter
+	emitter:Emit(3)
+end
+
+-- A few chunks of pavement that tumble away (only near the local player, a few per frame).
+local function debris(tile: BasePart)
+	if debrisThisFrame >= 6 or not nearLocalPlayer(tile, 140) then
+		return
+	end
+	debrisThisFrame += 1
+	for _ = 1, 2 do
+		local chunk = Instance.new("Part")
+		chunk.Name = "Debris"
+		chunk.Size = Vector3.new(1, 0.6, 1) * (0.8 + math.random() * 1.2)
+		chunk.Color = tile.Color:Lerp(Color3.new(0, 0, 0), math.random() * 0.25)
+		chunk.Material = tile.Material
+		chunk.CanCollide = false
+		chunk.CanQuery = false
+		chunk.CanTouch = false
+		chunk.CastShadow = false
+		chunk.CFrame = tile.CFrame * CFrame.new((math.random() - 0.5) * tile.Size.X, 0, (math.random() - 0.5) * tile.Size.Z)
+		chunk.AssemblyLinearVelocity = Vector3.new((math.random() - 0.5) * 16, 6 + math.random() * 10, (math.random() - 0.5) * 16)
+		chunk.AssemblyAngularVelocity = Vector3.new(math.random() * 10, math.random() * 10, math.random() * 10)
+		chunk.Parent = workspace
+		task.delay(2.5, function()
+			chunk:Destroy()
+		end)
+	end
+end
+
 
 local function setTileState(tile: BasePart, info: TileInfo, state: string)
 	if state == info.state then
@@ -54,6 +121,8 @@ local function setTileState(tile: BasePart, info: TileInfo, state: string)
 				CameraFx.shake(0.35)
 			end
 		end
+		crumbleDust(tile.Position, tile.Size)
+		debris(tile)
 		local spin = CFrame.Angles(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5)
 		TweenService:Create(tile, TweenInfo.new(1.1 + math.random() * 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 			CFrame = info.home * CFrame.new(0, -45, 0) * spin,
@@ -134,6 +203,7 @@ end
 
 local function step(dt: number)
 	local t = os.clock()
+	debrisThisFrame = 0
 	for tile, info in tileInfo do
 		if info.shaking and tile.Parent then
 			local flash = math.sin(t * 18) > 0

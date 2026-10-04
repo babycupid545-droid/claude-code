@@ -4,6 +4,8 @@
 --   * sprinkler sprays on the median
 --   * golden egg pickups (Egg Rain)
 --   * lighting for events (Night Drive, Fog) and car headlights at night
+--   * ambient particles: pollen over the median, petals drifting across the arena, and
+--     fireflies at night
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
@@ -161,6 +163,73 @@ local function spray(head: BasePart, big: boolean)
 	end
 end
 
+-- Ambient particles -----------------------------------------------------------------------------
+
+local fireflies: ParticleEmitter? = nil
+
+local function ambientEmitter(name: string, cf: CFrame, size: Vector3, props: { [string]: any }): ParticleEmitter
+	local box = part({ Name = name, Transparency = 1, Size = size, CFrame = cf })
+	box.Material = Enum.Material.SmoothPlastic
+	box.Parent = workspace
+	local e = Instance.new("ParticleEmitter")
+	e.Shape = Enum.ParticleEmitterShape.Box
+	e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	e.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	for k, v in props do
+		(e :: any)[k] = v
+	end
+	e.Parent = box
+	return e
+end
+
+local function buildAmbient()
+	local M = Config.Map
+	local y = M.RoadTopY
+	-- Warm pollen motes hanging over the grass median.
+	ambientEmitter("MedianPollen", CFrame.new(0, y + 6, 0), Vector3.new(Layout.halfLength * 2, 8, M.MedianWidth), {
+		Rate = 14,
+		Lifetime = NumberRange.new(4, 7),
+		Speed = NumberRange.new(0.3, 1),
+		SpreadAngle = Vector2.new(180, 180),
+		Acceleration = Vector3.new(0, 0.3, 0),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.2, 0.35), NumberSequenceKeypoint.new(1, 0) }),
+		Color = ColorSequence.new(Color3.fromRGB(255, 240, 170)),
+		LightEmission = 0.7,
+		Transparency = NumberSequence.new(0.2),
+	})
+	-- Petals and leaves tumbling across the whole arena on the breeze.
+	ambientEmitter("Petals", CFrame.new(0, y + 45, 0), Vector3.new(Layout.halfLength * 2.2, 4, Layout.outerEdge * 2.2), {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Rate = 10,
+		Lifetime = NumberRange.new(8, 12),
+		Speed = NumberRange.new(1, 2),
+		SpreadAngle = Vector2.new(40, 40),
+		EmissionDirection = Enum.NormalId.Bottom,
+		Acceleration = Vector3.new(3, -2.5, 1),
+		Drag = 0.5,
+		Rotation = NumberRange.new(0, 360),
+		RotSpeed = NumberRange.new(-120, 120),
+		Size = NumberSequence.new(0.45),
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 160, 190)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 230, 150)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 220, 110)),
+		}),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.1, 0.1), NumberSequenceKeypoint.new(0.9, 0.1), NumberSequenceKeypoint.new(1, 1) }),
+	})
+	-- Fireflies, only during Night Drive.
+	fireflies = ambientEmitter("Fireflies", CFrame.new(0, y + 7, 0), Vector3.new(Layout.halfLength * 2, 10, Layout.outerEdge * 2), {
+		Rate = 0,
+		Lifetime = NumberRange.new(3, 6),
+		Speed = NumberRange.new(0.5, 2),
+		SpreadAngle = Vector2.new(180, 180),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.5), NumberSequenceKeypoint.new(0.6, 0.15), NumberSequenceKeypoint.new(1, 0) }),
+		Color = ColorSequence.new(Color3.fromRGB(200, 255, 120)),
+		LightEmission = 1,
+		LightInfluence = 0,
+	})
+end
+
 -- Events: lighting ------------------------------------------------------------------------------
 
 type Saved = { clock: number, brightness: number, ambient: Color3, outdoor: Color3, density: number?, haze: number? }
@@ -207,6 +276,9 @@ end
 local function onEvent()
 	local id = RoundState:GetAttribute("Event")
 	nightActive = id == "NightDrive"
+	if fireflies then
+		fireflies.Rate = if nightActive then 60 else 0
+	end
 	if id == "NightDrive" then
 		save()
 		TweenService:Create(Lighting, TweenInfo.new(2.5), {
@@ -260,6 +332,7 @@ local function updateHeadlights()
 end
 
 function GameplayFx.start()
+	buildAmbient()
 	RoundState:GetAttributeChangedSignal("CrossTarget"):Connect(updateBeacon)
 	player:GetAttributeChangedSignal("Alive"):Connect(updateBeacon)
 	RoundState:GetAttributeChangedSignal("Event"):Connect(onEvent)

@@ -17,6 +17,7 @@ local RoundState = require(Shared.RoundState)
 local ClientData = require(script.Parent.Parent.ClientData)
 local Effects = require(script.Parent.Parent.Effects)
 local Sfx = require(script.Parent.Parent.Sfx)
+local ChickenAnimator = require(script.Parent.ChickenAnimator)
 
 local EggController = {}
 
@@ -127,6 +128,7 @@ local function shoot()
 	)
 	Remotes.ShootEgg:FireServer(direction, nextLocalId)
 	Sfx.play("EggShoot", { pitchJitter = 0.12 })
+	ChickenAnimator.shoot(player.Character)
 end
 
 local function onAction(_: string, state: Enum.UserInputState, _input: InputObject): Enum.ContextActionResult
