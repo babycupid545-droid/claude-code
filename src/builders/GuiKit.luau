@@ -1,10 +1,11 @@
 --!strict
--- Building blocks for the game's barnyard GUI style: wooden plank panels with cream trim and
--- nails, a picket fence peeking out underneath, dark-wood readouts, chunky 3D push buttons,
--- painted signs, red ribbons and sprite-sheet icons (golden eggs are the currency).
+-- Building blocks for the game's GUI: clean framed cards (a dark wood frame with a thin gold
+-- border around a dark or cream panel), compact buttons, chips and progress bars.
 --
--- Sizes are scale-based (with aspect-ratio constraints on top-level pieces) so the UI fits
--- every screen. Text uses TextScaled with a max size.
+-- Everything is laid out in pixels for a 1280x720 screen inside a full-screen "Root" frame;
+-- the client scales Root to fit the real screen (see src/client/Gui.luau), so sizes stay
+-- exact on every device. Text uses a fixed TextSize (no TextScaled), which keeps layouts
+-- stable and avoids the jitter/expansion TextScaled can cause.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -16,29 +17,27 @@ local Kit = {}
 local rgb = Color3.fromRGB
 
 Kit.Theme = {
-	Outline = rgb(58, 34, 22),
-	Text = rgb(255, 255, 255),
-	TextDim = rgb(255, 236, 200),
-	-- Warm planks.
-	PanelTop = rgb(190, 126, 74),
-	PanelBottom = rgb(134, 82, 46),
-	PillBg = rgb(82, 50, 30),
-	Cream = rgb(255, 244, 214),
-	Nail = rgb(96, 90, 100),
-	Barn = rgb(204, 60, 50),
-	Hay = rgb(246, 206, 96),
-	Grass = rgb(104, 196, 72),
-	Sky = rgb(110, 196, 255),
-	Yellow = rgb(255, 205, 64),
-	Orange = rgb(255, 150, 40),
-	Green = rgb(104, 196, 72),
-	Blue = rgb(72, 168, 236),
-	Red = rgb(214, 62, 50),
-	Purple = rgb(150, 100, 220),
-	Pink = rgb(255, 120, 170),
-	Grey = rgb(160, 150, 140),
-	TitleFont = Enum.Font.LuckiestGuy,
-	BodyFont = Enum.Font.FredokaOne,
+	Frame = rgb(96, 58, 32), -- the wooden frame around every card
+	Gold = rgb(236, 178, 86), -- thin outer border
+	GoldSoft = rgb(255, 216, 150), -- inner hairline
+	Dark = rgb(44, 29, 20), -- dark panel
+	Cream = rgb(255, 247, 230), -- light panel
+	CreamShade = rgb(244, 230, 204),
+	Ink = rgb(74, 46, 28), -- text on cream
+	InkSoft = rgb(140, 104, 76),
+	Text = rgb(255, 246, 228), -- text on dark
+	TextSoft = rgb(226, 206, 178),
+	Pink = rgb(255, 118, 176),
+	Orange = rgb(255, 156, 46),
+	Yellow = rgb(255, 204, 64),
+	Green = rgb(110, 200, 84),
+	Blue = rgb(76, 164, 236),
+	Red = rgb(226, 74, 64),
+	Purple = rgb(160, 110, 230),
+	Grey = rgb(150, 138, 126),
+	Track = rgb(28, 19, 13),
+	Display = Enum.Font.FredokaOne,
+	Body = Enum.Font.BuilderSansBold,
 }
 
 local T = Kit.Theme
@@ -68,101 +67,112 @@ function Kit.new(className: string, props: Props?, children: { Instance }?): any
 	return inst
 end
 
--- Darker / lighter versions of a colour for 3D effects.
-function Kit.shade(c: Color3, amount: number): Color3
-	if amount >= 0 then
-		return c:Lerp(Color3.new(1, 1, 1), amount)
+local function apply(inst: Instance, props: Props?)
+	if props then
+		local parent = nil
+		for key, value in props do
+			if key == "Parent" then
+				parent = value
+			else
+				(inst :: any)[key] = value
+			end
+		end
+		if parent then
+			inst.Parent = parent
+		end
 	end
-	return c:Lerp(Color3.new(0, 0, 0), -amount)
 end
 
-function Kit.corner(radius: number?, scale: boolean?): any
-	return Kit.new("UICorner", {
-		CornerRadius = if scale then UDim.new(radius or 0.25, 0) else UDim.new(0, radius or 12),
-	})
+function Kit.corner(px: number): any
+	return Kit.new("UICorner", { CornerRadius = UDim.new(0, px) })
 end
 
-function Kit.stroke(thickness: number?, color: Color3?, border: boolean?): any
+function Kit.stroke(color: Color3, thickness: number?, transparency: number?): any
 	return Kit.new("UIStroke", {
-		Thickness = thickness or 3,
-		Color = color or T.Outline,
-		ApplyStrokeMode = if border == false then Enum.ApplyStrokeMode.Contextual else Enum.ApplyStrokeMode.Border,
+		Color = color,
+		Thickness = thickness or 2,
+		Transparency = transparency or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		LineJoinMode = Enum.LineJoinMode.Round,
 	})
 end
 
-function Kit.vgradient(top: Color3, bottom: Color3): any
+function Kit.padding(px: number, vertical: number?): any
+	local v = vertical or px
+	return Kit.new("UIPadding", {
+		PaddingLeft = UDim.new(0, px),
+		PaddingRight = UDim.new(0, px),
+		PaddingTop = UDim.new(0, v),
+		PaddingBottom = UDim.new(0, v),
+	})
+end
+
+function Kit.list(direction: "H" | "V", gap: number?, halign: string?, valign: string?): any
+	return Kit.new("UIListLayout", {
+		FillDirection = if direction == "H" then Enum.FillDirection.Horizontal else Enum.FillDirection.Vertical,
+		Padding = UDim.new(0, gap or 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = if halign == "Center"
+			then Enum.HorizontalAlignment.Center
+			elseif halign == "Right" then Enum.HorizontalAlignment.Right
+			else Enum.HorizontalAlignment.Left,
+		VerticalAlignment = if valign == "Top"
+			then Enum.VerticalAlignment.Top
+			elseif valign == "Bottom" then Enum.VerticalAlignment.Bottom
+			else Enum.VerticalAlignment.Center,
+	})
+end
+
+-- A soft top-to-bottom sheen for panels and buttons.
+function Kit.sheen(strength: number?): any
+	local s = strength or 0.12
 	return Kit.new("UIGradient", {
-		Color = ColorSequence.new(top, bottom),
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.new(1 - s, 1 - s, 1 - s)),
 		Rotation = 90,
 	})
 end
 
-function Kit.aspect(ratio: number): any
-	return Kit.new("UIAspectRatioConstraint", { AspectRatio = ratio })
+function Kit.scale(): any
+	return Kit.new("UIScale", { Name = "AnimScale" })
 end
 
-function Kit.list(direction: "H" | "V", padding: number?, align: string?): any
-	return Kit.new("UIListLayout", {
-		FillDirection = if direction == "H" then Enum.FillDirection.Horizontal else Enum.FillDirection.Vertical,
-		Padding = UDim.new(padding or 0.04, 0),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		HorizontalAlignment = if align == "Left"
-			then Enum.HorizontalAlignment.Left
-			elseif align == "Right" then Enum.HorizontalAlignment.Right
-			else Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-	})
-end
-
-function Kit.padding(scale: number): any
-	return Kit.new("UIPadding", {
-		PaddingLeft = UDim.new(scale, 0),
-		PaddingRight = UDim.new(scale, 0),
-		PaddingTop = UDim.new(scale, 0),
-		PaddingBottom = UDim.new(scale, 0),
-	})
-end
-
--- Outlined cartoon text.
-function Kit.text(name: string, text: string, props: Props?): TextLabel
+-- Text with a fixed size. `color`/`font` default to light display text.
+function Kit.text(name: string, text: string, size: number, props: Props?): TextLabel
 	local label = Kit.new("TextLabel", {
 		Name = name,
 		Text = text,
-		BackgroundTransparency = 1,
+		TextSize = size,
+		Font = T.Display,
 		TextColor3 = T.Text,
-		Font = T.BodyFont,
-		TextScaled = true,
-		TextWrapped = true,
-		Size = UDim2.fromScale(1, 1),
-	}, {
-		Kit.new("UIStroke", { Thickness = 2.5, Color = T.Outline, LineJoinMode = Enum.LineJoinMode.Round }),
-		Kit.new("UITextSizeConstraint", { MaxTextSize = 48, MinTextSize = 8 }),
+		BackgroundTransparency = 1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		Size = UDim2.new(1, 0, 0, size + 6),
 	})
-	if props then
-		for key, value in props do
-			if key == "MaxTextSize" then
-				(label:FindFirstChildOfClass("UITextSizeConstraint") :: UITextSizeConstraint).MaxTextSize = value
-			elseif key == "StrokeThickness" then
-				(label:FindFirstChildOfClass("UIStroke") :: UIStroke).Thickness = value
-			else
-				(label :: any)[key] = value
-			end
-		end
-	end
+	apply(label, props)
 	return label
+end
+
+-- A thin dark outline for text that sits on the 3D world (no panel behind it).
+function Kit.textStroke(label: TextLabel, thickness: number?)
+	Kit.new("UIStroke", {
+		Thickness = thickness or 2,
+		Color = T.Dark,
+		Transparency = 0.1,
+		LineJoinMode = Enum.LineJoinMode.Round,
+		Parent = label,
+	})
 end
 
 -- An icon from the sprite sheets. The client fills in the image (or an emoji fallback)
 -- from the Sprite attribute, so this works before the sheets are uploaded.
-function Kit.icon(name: string, sprite: string, props: Props?): ImageLabel
+function Kit.icon(name: string, sprite: string, size: number, props: Props?): ImageLabel
 	local id, s = SpriteSheets.find(sprite)
 	local image = Kit.new("ImageLabel", {
 		Name = name,
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Fit,
-		Size = UDim2.fromScale(1, 1),
-		SizeConstraint = Enum.SizeConstraint.RelativeYY,
+		Size = UDim2.fromOffset(size, size),
 		Image = id,
 	})
 	image:SetAttribute("Sprite", sprite)
@@ -170,324 +180,183 @@ function Kit.icon(name: string, sprite: string, props: Props?): ImageLabel
 		image.ImageRectOffset = s.offset
 		image.ImageRectSize = s.size
 	end
-	if props then
-		for key, value in props do
-			(image :: any)[key] = value
-		end
-	end
+	apply(image, props)
 	return image
 end
 
--- A tiling texture overlay (woodTile, hayTile, paperTile, printTile) filling its parent.
-function Kit.texture(sprite: string, tile: number, transparency: number, corner: UDim?): ImageLabel
-	local tex = Kit.icon("Texture", sprite, {
-		Size = UDim2.fromScale(1, 1),
-		SizeConstraint = Enum.SizeConstraint.RelativeXY,
-		ScaleType = Enum.ScaleType.Tile,
-		TileSize = UDim2.fromOffset(tile, tile),
-		ImageTransparency = transparency,
-		ZIndex = 1,
-	})
-	if corner then
-		Kit.new("UICorner", { CornerRadius = corner, Parent = tex })
-	end
-	return tex
-end
-
--- Little nail heads in the corners of a board.
-function Kit.nails(parent: Instance, inset: number?, size: number?)
-	local i = inset or 10
-	local d = size or 8
-	for _, corner in { Vector2.new(0, 0), Vector2.new(1, 0), Vector2.new(0, 1), Vector2.new(1, 1) } do
-		Kit.new("Frame", {
-			Name = "Nail",
-			AnchorPoint = corner,
-			Position = UDim2.new(corner.X, if corner.X == 0 then i else -i, corner.Y, if corner.Y == 0 then i else -i),
-			Size = UDim2.fromOffset(d, d),
-			BackgroundColor3 = T.Nail,
-			ZIndex = 4,
-			Parent = parent,
-		}, {
-			Kit.corner(1, true),
-			Kit.new("UIStroke", { Thickness = 1.5, Color = T.Outline }),
-			Kit.new("UIGradient", { Color = ColorSequence.new(rgb(230, 230, 240), rgb(90, 86, 96)), Rotation = 45 }),
-		})
-	end
-end
-
--- A dark wooden capsule for HUD readouts.
-function Kit.pill(name: string, props: Props?): Frame
-	local pill = Kit.new("Frame", {
+-- The framed card every panel uses: wooden frame + gold border, and an `Inner` panel
+-- (dark or cream) that holds the content. Returns the card and its Inner.
+function Kit.card(name: string, size: Vector2, style: "dark" | "cream" | nil, props: Props?): (Frame, Frame)
+	local cream = style == "cream"
+	local card = Kit.new("Frame", {
 		Name = name,
-		BackgroundColor3 = T.PillBg,
-		BackgroundTransparency = 0.05,
+		Size = UDim2.fromOffset(size.X, size.Y),
+		BackgroundColor3 = T.Frame,
 	}, {
-		Kit.corner(0.5, true),
-		Kit.stroke(3),
-		Kit.vgradient(Color3.new(1, 1, 1), rgb(170, 150, 140)),
+		Kit.corner(12),
+		Kit.stroke(T.Gold, 2),
+		Kit.scale(),
 	})
-	Kit.texture("woodTile", 96, 0.55, UDim.new(0.5, 0)).Parent = pill
-	if props then
-		for key, value in props do
-			(pill :: any)[key] = value
-		end
-	end
-	return pill
-end
-
--- A big wooden board: drop shadow, plank body with cream trim and nails, and a picket
--- fence with grass peeking out along the bottom. Content goes in `Body`.
-function Kit.panel(name: string, top: Color3?, bottom: Color3?, props: Props?): (Frame, Frame)
-	local container = Kit.new("Frame", {
-		Name = name,
-		BackgroundTransparency = 1,
-	}, { Kit.new("UIScale", { Name = "AnimScale" }) })
-	Kit.new("Frame", {
-		Name = "Shadow",
-		Size = UDim2.fromScale(1, 1),
-		Position = UDim2.new(0, 0, 0, 8),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.55,
-		ZIndex = 0,
-		Parent = container,
-	}, { Kit.corner(22) })
-	-- Fence and grass behind the board, poking out below it.
-	Kit.icon("Fence", "fence", {
-		AnchorPoint = Vector2.new(0.5, 0.35),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.new(1.02, 0, 0, 52),
-		SizeConstraint = Enum.SizeConstraint.RelativeXY,
-		ScaleType = Enum.ScaleType.Tile,
-		TileSize = UDim2.fromOffset(208, 52),
-		ZIndex = 0,
-		Parent = container,
-	})
-	Kit.icon("Grass", "grass", {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 1, 2),
-		Size = UDim2.new(1.06, 0, 0, 34),
-		SizeConstraint = Enum.SizeConstraint.RelativeXY,
-		ScaleType = Enum.ScaleType.Tile,
-		TileSize = UDim2.fromOffset(136, 34),
-		ZIndex = 0,
-		Parent = container,
-	})
-	local body = Kit.new("Frame", {
-		Name = "Body",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		ClipsDescendants = false,
-		Parent = container,
-	}, {
-		Kit.corner(22),
-		Kit.stroke(4),
-		Kit.vgradient(top or T.PanelTop, bottom or T.PanelBottom),
-	})
-	local planks = Kit.texture("woodTile", 220, 0.15, UDim.new(0, 22))
-	planks.Name = "Pattern"
-	planks.Parent = body
-	Kit.new("Frame", {
-		Name = "Trim",
+	local inner = Kit.new("Frame", {
+		Name = "Inner",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, -14, 1, -14),
-		BackgroundTransparency = 1,
-		ZIndex = 1,
-		Parent = body,
+		Size = UDim2.new(1, -8, 1, -8),
+		BackgroundColor3 = if cream then T.Cream else T.Dark,
+		BackgroundTransparency = if cream then 0 else 0.08,
+		Parent = card,
 	}, {
-		Kit.corner(17),
-		Kit.new("UIStroke", { Thickness = 3, Color = T.Cream, Transparency = 0.25 }),
+		Kit.corner(9),
+		Kit.stroke(T.GoldSoft, 1, if cream then 0.2 else 0.55),
+		Kit.new("UIGradient", {
+			Color = if cream
+				then ColorSequence.new(T.Cream, T.CreamShade)
+				else ColorSequence.new(rgb(255, 255, 255), rgb(200, 200, 200)),
+			Rotation = 90,
+		}),
 	})
-	Kit.nails(body, 16, 9)
-	if props then
-		for key, value in props do
-			(container :: any)[key] = value
-		end
-	end
-	return container, body
+	apply(card, props)
+	return card, inner
 end
 
--- A painted wooden sign with a title on it (for panel headers and HUD banners).
-function Kit.sign(name: string, text: string, props: Props?): Frame
-	local sign = Kit.new("Frame", {
+-- A progress bar: dark Track with a Fill (0..1 via Fill.Size X scale).
+function Kit.bar(name: string, size: Vector2, color: Color3?, props: Props?): Frame
+	local track = Kit.new("Frame", {
 		Name = name,
-		BackgroundColor3 = T.PanelTop,
-	}, {
-		Kit.corner(0.28, true),
-		Kit.stroke(4),
-		Kit.vgradient(rgb(255, 236, 210), rgb(190, 160, 140)),
-		Kit.new("UIScale", { Name = "AnimScale" }),
-	})
-	Kit.texture("woodTile", 120, 0.2, UDim.new(0.28, 0)).Parent = sign
-	Kit.nails(sign, 7, 7)
-	Kit.text("Label", text, {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.84, 0.74),
-		Font = T.TitleFont,
-		MaxTextSize = 44,
-		StrokeThickness = 3,
-		ZIndex = 3,
-		Parent = sign,
-	})
-	if props then
-		for key, value in props do
-			(sign :: any)[key] = value
-		end
-	end
-	return sign
-end
-
--- A show ribbon with folded tails, for winners and event titles.
-function Kit.ribbon(name: string, text: string, color: Color3?, props: Props?): Frame
-	local ribbon = Kit.new("Frame", {
-		Name = name,
-		BackgroundTransparency = 1,
-	}, { Kit.new("UIScale", { Name = "AnimScale" }) })
-	-- The painted ribbon tails (when the farm sheet is uploaded)...
-	Kit.icon("Art", "ribbon", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(1.2, 1.25),
-		SizeConstraint = Enum.SizeConstraint.RelativeXY,
-		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(150, 20, 362, 100),
-		ImageColor3 = if color then color:Lerp(Color3.new(1, 1, 1), 0.35) else Color3.new(1, 1, 1),
-		ZIndex = 0,
-		Parent = ribbon,
-	})
-	-- ...behind a band that always shows.
+		Size = UDim2.fromOffset(size.X, size.Y),
+		BackgroundColor3 = T.Track,
+		BackgroundTransparency = 0.2,
+	}, { Kit.corner(math.floor(size.Y / 2)) })
 	Kit.new("Frame", {
-		Name = "Band",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.fromScale(0.84, 0.74),
-		BackgroundColor3 = color or T.Barn,
-		ZIndex = 1,
-		Parent = ribbon,
+		Name = "Fill",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = color or T.Orange,
+		Parent = track,
 	}, {
-		Kit.corner(0.2, true),
-		Kit.stroke(4),
-		Kit.vgradient(Color3.new(1, 1, 1), rgb(200, 190, 190)),
+		Kit.corner(math.floor(size.Y / 2)),
+		Kit.new("UIGradient", {
+			Color = ColorSequence.new(rgb(255, 255, 255), rgb(215, 215, 215)),
+			Rotation = 90,
+		}),
 	})
-	Kit.text("Label", text, {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.fromScale(0.78, 0.62),
-		Font = T.TitleFont,
-		MaxTextSize = 56,
-		StrokeThickness = 3.5,
-		ZIndex = 3,
-		Parent = ribbon,
-	})
-	if props then
-		for key, value in props do
-			(ribbon :: any)[key] = value
-		end
-	end
-	return ribbon
+	apply(track, props)
+	return track
 end
 
--- A chunky 3D push button: a darker Base sits under the Face, which drops on press.
--- The button itself is the transparent TextButton, so `button.Activated` just works.
--- Children of Face.Content: Icon (optional) and Label.
-function Kit.button(name: string, color: Color3, label: string?, sprite: string?, props: Props?, corner: number?): TextButton
+-- A button styled like the cards. `color` = nil gives the dark HUD style; a colour gives a
+-- filled accent button. The TextButton is the hit area (so `.Activated` just works); its
+-- visuals live in Border > Inner > Content (Icon, Label).
+function Kit.button(name: string, label: string?, sprite: string?, size: Vector2, color: Color3?, props: Props?): TextButton
 	local button = Kit.new("TextButton", {
 		Name = name,
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-	}, { Kit.new("UIScale", { Name = "AnimScale" }) })
+		Size = UDim2.fromOffset(size.X, size.Y),
+	}, { Kit.scale() })
 	button:SetAttribute("Juicy", true)
-	button:SetAttribute("Color", color)
-	Kit.new("Frame", {
-		Name = "Base",
-		Size = UDim2.new(1, 0, 1, -4),
-		Position = UDim2.new(0, 0, 0, 6),
-		BackgroundColor3 = Kit.shade(color, -0.45),
+	local border = Kit.new("Frame", {
+		Name = "Border",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = T.Frame,
 		Parent = button,
-	}, { Kit.corner(corner or 0.3, true), Kit.stroke(3) })
-	local face = Kit.new("Frame", {
-		Name = "Face",
-		Size = UDim2.new(1, 0, 1, -4),
-		BackgroundColor3 = color,
-		Parent = button,
-	}, {
-		Kit.corner(corner or 0.3, true),
-		Kit.stroke(3),
-		Kit.vgradient(Color3.new(1, 1, 1), Color3.fromRGB(205, 205, 215)),
-	})
-	-- Glossy top half.
-	Kit.new("Frame", {
-		Name = "Gloss",
-		Size = UDim2.new(1, -8, 0.42, 0),
-		Position = UDim2.new(0, 4, 0, 3),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.72,
-		ZIndex = 2,
-		Parent = face,
-	}, { Kit.corner(0.5, true) })
+	}, { Kit.corner(10), Kit.stroke(T.Gold, 2) })
+	local inner = Kit.new("Frame", {
+		Name = "Inner",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -6, 1, -6),
+		BackgroundColor3 = color or T.Dark,
+		BackgroundTransparency = if color then 0 else 0.08,
+		Parent = border,
+	}, { Kit.corner(8), Kit.sheen(if color then 0.22 else 0.1) })
+	if color then
+		inner:SetAttribute("Accent", color)
+	end
 	local content = Kit.new("Frame", {
 		Name = "Content",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		ZIndex = 3,
-		Parent = face,
-	}, { Kit.list("H", 0.04), Kit.padding(0.08) })
+		Parent = inner,
+	}, { Kit.list("H", 6, "Center", "Center") })
+	local iconSize = math.floor(math.min(size.Y - 14, 28))
 	if sprite then
-		Kit.icon("Icon", sprite, {
-			LayoutOrder = 1,
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 3,
-			Parent = content,
-		})
+		Kit.icon("Icon", sprite, iconSize, { LayoutOrder = 1, Parent = content })
 	end
 	if label then
-		Kit.text("Label", label, {
+		local text = Kit.text("Label", label, math.clamp(math.floor(size.Y * 0.38), 13, 22), {
 			LayoutOrder = 2,
-			Font = T.TitleFont,
-			Size = UDim2.fromScale(if sprite then 0.62 else 1, 0.9),
-			ZIndex = 3,
-			MaxTextSize = 36,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromScale(0, 1),
+			TextXAlignment = Enum.TextXAlignment.Center,
 			Parent = content,
 		})
-	end
-	if props then
-		for key, value in props do
-			(button :: any)[key] = value
+		if color then
+			Kit.textStroke(text, 1.5)
 		end
 	end
+	apply(button, props)
 	return button
 end
 
+-- A small rounded chip (dark by default) holding an icon and a value.
+function Kit.chip(name: string, sprite: string?, text: string, size: Vector2, props: Props?): Frame
+	local chip = Kit.new("Frame", {
+		Name = name,
+		Size = UDim2.fromOffset(size.X, size.Y),
+		BackgroundColor3 = T.Dark,
+		BackgroundTransparency = 0.1,
+	}, {
+		Kit.corner(math.floor(size.Y / 2)),
+		Kit.stroke(T.Gold, 1.5, 0.3),
+		Kit.padding(8, 0),
+		Kit.list("H", 6, "Center", "Center"),
+		Kit.scale(),
+	})
+	if sprite then
+		Kit.icon("Icon", sprite, size.Y - 10, { LayoutOrder = 1, Parent = chip })
+	end
+	Kit.text("Label", text, math.floor(size.Y * 0.55), {
+		LayoutOrder = 2,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromScale(0, 1),
+		Parent = chip,
+	})
+	apply(chip, props)
+	return chip
+end
+
 -- A spinning sunburst for big moments (the client rotates anything tagged "SpinUi").
-function Kit.sunburst(name: string, props: Props?): ImageLabel
-	local burst = Kit.icon(name, "sunburst", {
+function Kit.sunburst(name: string, size: number, props: Props?): ImageLabel
+	local burst = Kit.icon(name, "sunburst", size, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		ImageTransparency = 0.35,
-		ImageColor3 = Color3.fromRGB(255, 230, 140),
+		ImageTransparency = 0.55,
+		ImageColor3 = rgb(255, 228, 150),
 		ZIndex = 0,
 	})
 	burst:AddTag("SpinUi")
-	if props then
-		for key, value in props do
-			(burst :: any)[key] = value
-		end
-	end
+	apply(burst, props)
 	return burst
 end
 
-function Kit.screen(name: string, displayOrder: number?): ScreenGui
-	return Kit.new("ScreenGui", {
+-- A ScreenGui with a full-screen `Root` frame that the client scales to fit the screen.
+function Kit.screen(name: string, displayOrder: number?): (ScreenGui, Frame)
+	local screen = Kit.new("ScreenGui", {
 		Name = name,
 		ResetOnSpawn = false,
-		IgnoreGuiInset = false,
+		IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
 		DisplayOrder = displayOrder or 0,
 	})
+	local root = Kit.new("Frame", {
+		Name = "Root",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = screen,
+	}, { Kit.new("UIScale", { Name = "Fit" }) })
+	return screen, root
 end
 
 return Kit

@@ -59,7 +59,13 @@ local function hop(root: BasePart, times: number)
 	end
 	task.spawn(function()
 		for _ = 1, times do
-			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			if humanoid.Health <= 0 then
+				return
+			end
+			-- Only hop off the ground; forcing a jump in mid-air would give free double jumps.
+			if humanoid.FloorMaterial ~= Enum.Material.Air then
+				humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
 			task.wait(0.45)
 		end
 	end)
@@ -96,7 +102,12 @@ local function play(userId: number, itemId: string)
 			local humanoid = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
 			local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
 			if animator then
-				animator:LoadAnimation(animation):Play()
+				-- Free each track when it ends; an Animator only holds a limited number.
+				local emoteTrack = animator:LoadAnimation(animation)
+				emoteTrack.Stopped:Once(function()
+					emoteTrack:Destroy()
+				end)
+				emoteTrack:Play()
 			end
 		end
 		return

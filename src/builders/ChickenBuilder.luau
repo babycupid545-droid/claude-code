@@ -19,6 +19,9 @@ local Meshes = require(script.Parent.Meshes)
 
 local ChickenBuilder = {}
 
+-- Bump when the chicken model changes so already-built rigs get rebuilt.
+ChickenBuilder.RigVersion = 2
+
 local HIP_HEIGHT = 1.3
 local ROOT_SIZE = Vector3.new(2.2, 2, 2.2)
 local ROOT_Y = HIP_HEIGHT + ROOT_SIZE.Y / 2
@@ -284,8 +287,8 @@ local MESH_JOINTS: { [string]: CFrame } = {
 	LeftWing = CFrame.new(-1.38, 2.95, -0.1),
 	RightWing = CFrame.new(1.38, 2.95, -0.1),
 	Tail = CFrame.new(0, 2.95, 1.45),
-	LeftHip = CFrame.new(-0.62, 1.3, 0.22),
-	RightHip = CFrame.new(0.62, 1.3, 0.22),
+	LeftHip = CFrame.new(-0.55, 1.35, 0.25),
+	RightHip = CFrame.new(0.55, 1.35, 0.25),
 }
 -- The main region of each moving joint (other regions on that joint weld to it).
 local MESH_ANCHOR = { Body = "Body", Head = "Head", LeftWing = "WingL", RightWing = "WingR", Tail = "Tail", LeftHip = "LegL", RightHip = "LegR" }
@@ -357,10 +360,14 @@ local function buildMeshBody(model: Model, root: BasePart, look: Look): boolean
 		end
 	end
 	for _, key in { "LidL", "LidR" } do
-		parts[key].Transparency = 1
+		if parts[key] then
+			parts[key].Transparency = 1
+		end
 	end
-	parts.Cheek.Transparency = 0.25
-	if look.style == "Robo" then
+	if parts.Cheek then
+		parts.Cheek.Transparency = 0.25
+	end
+	if look.style == "Robo" and parts.Pupil then
 		parts.Pupil.Material = Enum.Material.Neon
 		if parts.Comb then
 			parts.Comb.Material = Enum.Material.Neon
@@ -431,6 +438,7 @@ function ChickenBuilder.build(skin: Cosmetics.Item): Model
 	end
 	finish(model, look)
 	model:SetAttribute("MeshRig", usedMeshes)
+	model:SetAttribute("RigVersion", ChickenBuilder.RigVersion)
 
 	local body = model:FindFirstChild("Body")
 	if look.sparkles and body then
@@ -459,7 +467,8 @@ function ChickenBuilder.buildAll(folder: Instance): number
 	local count = 0
 	for _, item in Cosmetics.inSlot("ChickenSkin") do
 		local existing = folder:FindFirstChild(item.id)
-		if existing and upgrade and existing:GetAttribute("MeshRig") ~= true then
+		local stale = existing ~= nil and existing:GetAttribute("RigVersion") ~= ChickenBuilder.RigVersion
+		if existing and ((upgrade and existing:GetAttribute("MeshRig") ~= true) or stale) then
 			existing:Destroy()
 			existing = nil
 		end

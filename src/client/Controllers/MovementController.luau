@@ -28,6 +28,11 @@ local stamina = C.GlideStamina
 local gliding = false
 local glideTrack: AnimationTrack? = nil
 local windLoop: Sound? = nil
+local activePush: LinearVelocity? = nil
+-- Coyote time: a jump pressed just after walking off an edge still counts.
+local COYOTE_TIME = 0.12
+local lastGrounded = 0
+local jumpedSinceGrounded = false
 
 local function jumpHeld(h: Humanoid): boolean
 	return h.Jump
@@ -67,12 +72,17 @@ local function onCharacter(character: Model)
 	if not h or not r then
 		return
 	end
+	-- Respawning mid-glide (e.g. sent back to the lobby) must not leave the wind looping or
+	-- the camera zoomed out.
+	setGliding(false)
 	humanoid, root = h, r
 	stamina = C.GlideStamina
-	gliding = false
 	glideTrack = nil
+	lastGrounded = 0
+	jumpedSinceGrounded = false
 	h.StateChanged:Connect(function(_, new)
 		if new == Enum.HumanoidStateType.Jumping then
+			jumpedSinceGrounded = true
 			Sfx.play("Jump", { pitchJitter = 0.08 })
 		elseif new == Enum.HumanoidStateType.Landed then
 			Sfx.play("Land", { pitchJitter = 0.1 })
@@ -93,6 +103,10 @@ local function step(dt: number)
 	end
 	local grounded = h.FloorMaterial ~= Enum.Material.Air
 	if grounded then
+		lastGrounded = os.clock()
+		if h:GetState() ~= Enum.HumanoidStateType.Jumping then
+			jumpedSinceGrounded = false
+		end
 		stamina = math.min(C.GlideStamina, stamina + dt * C.GlideRecharge)
 		setGliding(false)
 		return
@@ -115,10 +129,32 @@ local function step(dt: number)
 	end
 end
 
+local function onJumpRequest()
+	local h, r = humanoid, root
+	if not h or not r or h.Health <= 0 or jumpedSinceGrounded then
+		return
+	end
+	if h.FloorMaterial ~= Enum.Material.Air or os.clock() - lastGrounded > COYOTE_TIME then
+		return
+	end
+	if h:GetState() ~= Enum.HumanoidStateType.Freefall then
+		return
+	end
+	jumpedSinceGrounded = true
+	local v = r.AssemblyLinearVelocity
+	r.AssemblyLinearVelocity = Vector3.new(v.X, h.JumpPower, v.Z)
+	h:ChangeState(Enum.HumanoidStateType.Jumping)
+end
+
 local function applyKnockback(velocity: Vector3)
 	local r = root
 	if not r or typeof(velocity) ~= "Vector3" then
 		return
+	end
+	-- Two pushes at once (egg + sprinkler) would fight each other with infinite force.
+	if activePush then
+		activePush:Destroy()
+		activePush = nil
 	end
 	Sfx.play("Boing", { pitchJitter = 0.1 })
 	Sfx.play("EggHit")
@@ -132,10 +168,18 @@ local function applyKnockback(velocity: Vector3)
 	push.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
 	push.VectorVelocity = velocity
 	push.RelativeTo = Enum.ActuatorRelativeTo.World
-	push.Parent = r
-	task.delay(Config.Egg.KnockbackDuration, function()
-		push:Destroy()
+	push.Destroying:Once(function()
 		attachment:Destroy()
+	end)
+	push.Parent = r
+	activePush = push
+	task.delay(Config.Egg.KnockbackDuration, function()
+		if activePush ~= push then
+			-- A newer push replaced this one (and destroyed it).
+			return
+		end
+		activePush = nil
+		push:Destroy()
 		if r.Parent then
 			r.AssemblyLinearVelocity = velocity * 0.5
 		end
@@ -176,6 +220,7 @@ function MovementController.start()
 		task.spawn(onCharacter, player.Character)
 	end
 	RunService.PreSimulation:Connect(step)
+	UserInputService.JumpRequest:Connect(onJumpRequest)
 	Remotes.Knockback.OnClientEvent:Connect(applyKnockback)
 	Remotes.ChickenSplat.OnClientEvent:Connect(onSplat)
 end

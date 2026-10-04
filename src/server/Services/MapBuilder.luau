@@ -35,8 +35,11 @@ function MapBuilder.lobby(): Model
 end
 
 function MapBuilder.lighting()
-	if not Lighting:FindFirstChildOfClass("Atmosphere") then
-		require(Builders:WaitForChild("LightingBuilder")).build()
+	-- Also re-applies when the place was built with an older lighting version.
+	local builder = require(Builders:WaitForChild("LightingBuilder")) :: any
+	local version = Lighting:GetAttribute("LightingVersion")
+	if not Lighting:FindFirstChildOfClass("Atmosphere") or type(version) ~= "number" or version < builder.Version then
+		builder.build()
 	end
 end
 

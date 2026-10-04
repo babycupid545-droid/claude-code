@@ -20,6 +20,7 @@ local VOLUME = 0.5
 local sounds: { [string]: Sound } = {}
 local current: string? = nil
 local muted = false
+local duckToken = 0
 
 local function sound(track: string): Sound?
 	if sounds[track] then
@@ -82,7 +83,13 @@ function MusicController.duck(seconds: number)
 	local group = Sfx.MusicGroup
 	local full = if muted then 0 else 0.55
 	TweenService:Create(group, TweenInfo.new(0.2), { Volume = full * 0.25 }):Play()
+	-- Only the latest duck brings the music back, so overlapping stingers stay ducked.
+	duckToken += 1
+	local token = duckToken
 	task.delay(seconds, function()
+		if token ~= duckToken then
+			return
+		end
 		TweenService:Create(group, TweenInfo.new(1), { Volume = if muted then 0 else 0.55 }):Play()
 	end)
 end

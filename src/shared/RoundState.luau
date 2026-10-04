@@ -15,10 +15,12 @@
 --   CrossDeadline  server time the other sidewalk crumbles
 --   Event          id of the running event ("" when none), see Shared/Events
 --   EventEndsAt    server time the event ends
+--   RoundPlayers   how many chickens started the current round (0 between rounds)
 -- Player attributes:
 --   Alive          true while a chicken is in the current round
 --   Driver         true while driving in Road Rage
 --   Team           "A" | "B" | nil
+--   Afk            true while the player sits out rounds (stays in the lobby)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -44,6 +46,7 @@ if RunService:IsServer() then
 	state:SetAttribute("CrossDeadline", 0)
 	state:SetAttribute("Event", "")
 	state:SetAttribute("EventEndsAt", 0)
+	state:SetAttribute("RoundPlayers", 0)
 	state.Parent = ReplicatedStorage
 	return state
 end

@@ -42,12 +42,12 @@ Config.Map = {
 }
 
 Config.Chicken = {
-	WalkSpeed = 18,
+	WalkSpeed = 14,
 	JumpPower = 75, -- about 14 studs high: enough to clear a car with good timing
 	GlideFallSpeed = 9,
 	GlideHorizontalSpeed = 26,
 	GlideStamina = 1.6, -- seconds of gliding
-	GlideRecharge = 0.8, -- stamina per second while on the ground
+	GlideRecharge = 2.0, -- stamina per second while on the ground (refills in under a second)
 }
 
 Config.Traffic = {
@@ -89,9 +89,9 @@ Config.Egg = {
 -- Crossing: everyone must reach the other sidewalk before the one they're on crumbles.
 -- It rises again a moment later, and then they must cross back. Each phase is shorter.
 Config.Shuttle = {
-	FirstPhase = 22, -- seconds to make the first crossing
+	FirstPhase = 25, -- seconds to make the first crossing (walking the 142-stud gap takes ~10s)
 	PhaseStep = 2, -- each following phase is this much shorter...
-	MinPhase = 11, -- ...down to this
+	MinPhase = 15, -- ...down to this
 	Warning = 4, -- tiles shake and flash for this long before dropping
 	RiseDelay = 3, -- how long a dropped sidewalk stays down
 }

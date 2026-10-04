@@ -105,6 +105,7 @@ local function setTileState(tile: BasePart, info: TileInfo, state: string)
 	if state == info.state then
 		return
 	end
+	local previous = info.state
 	info.state = state
 	if state == "Warn" then
 		info.shaking = true
@@ -128,6 +129,11 @@ local function setTileState(tile: BasePart, info: TileInfo, state: string)
 			CFrame = info.home * CFrame.new(0, -45, 0) * spin,
 			Transparency = 1,
 		}):Play()
+	elseif previous == "Warn" then
+		-- The round ended mid-warning: it never dropped, so just stop shaking.
+		info.shaking = false
+		tile.CFrame = info.home
+		tile.Color = info.base
 	else -- Solid
 		info.shaking = false
 		tile.CFrame = info.home * CFrame.new(0, -20, 0)
@@ -201,6 +207,16 @@ local function track(list: { Ambient }, inst: Instance)
 	end
 end
 
+-- Golden eggs come and go all round long; forget them once they're gone.
+local function untrack(list: { Ambient }, inst: Instance)
+	for i, a in list do
+		if a.inst == inst then
+			table.remove(list, i)
+			return
+		end
+	end
+end
+
 local function step(dt: number)
 	local t = os.clock()
 	debrisThisFrame = 0
@@ -239,6 +255,9 @@ function WorldAnimator.start()
 		end
 		CollectionService:GetInstanceAddedSignal(tag):Connect(function(inst)
 			track(list, inst)
+		end)
+		CollectionService:GetInstanceRemovedSignal(tag):Connect(function(inst)
+			untrack(list, inst)
 		end)
 	end
 	RunService.Heartbeat:Connect(step)

@@ -95,7 +95,8 @@ function EventService.run(planned: { Planned }, roundStart: number, ctx: HazardS
 				RoundState:SetAttribute("EventEndsAt", roundStart + p.stop)
 				Remotes.Feed:FireAllClients(`EVENT: {event.name}! {event.description}`, event.sprite)
 				apply(p.id, true, ctx)
-				task.wait(p.stop - p.at)
+				-- Wait until the absolute end time so events don't drift from EventEndsAt.
+				task.wait(math.max(0, roundStart + p.stop - workspace:GetServerTimeNow()))
 				if running ~= gen then
 					return
 				end

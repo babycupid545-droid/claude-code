@@ -26,7 +26,7 @@ export type Context = {
 	isAlive: (Player) -> boolean,
 }
 
-local function burstSprinkler(index: number, ctx: Context)
+local function burstSprinkler(gen: number, index: number, ctx: Context)
 	local head = sprinklers[index]
 	if not head then
 		return
@@ -34,6 +34,10 @@ local function burstSprinkler(index: number, ctx: Context)
 	local M = Config.Median
 	Remotes.Sprinkler:FireAllClients(index, "warn")
 	task.wait(M.SprinklerWarning)
+	-- The round may have ended during the warning; don't shove the winners around.
+	if running ~= gen then
+		return
+	end
 	Remotes.Sprinkler:FireAllClients(index, "burst")
 	for _, player in ctx.getChickens() do
 		local root = ChickenService.getRoot(player)
@@ -56,7 +60,7 @@ local function sprinklerLoop(gen: number, ctx: Context)
 		if running ~= gen or #sprinklers == 0 then
 			continue
 		end
-		task.spawn(burstSprinkler, rng:NextInteger(1, #sprinklers), ctx)
+		task.spawn(burstSprinkler, gen, rng:NextInteger(1, #sprinklers), ctx)
 	end
 end
 
@@ -65,11 +69,20 @@ local function harvesterLoop(gen: number)
 	task.wait(rng:NextNumber(8, 14))
 	while running == gen do
 		local dir = if rng:NextNumber() < 0.5 then 1 else -1
+		local launchedAt = os.clock()
 		if TrafficService.launchHarvester(dir) then
 			Remotes.Feed:FireAllClients("A harvester is coming down the median!", "car")
 		end
-		local wait = harvestEvery or rng:NextNumber(M.HarvesterEveryMin, M.HarvesterEveryMax)
-		task.wait(wait)
+		-- Wait in short steps so Harvest Time kicks in right away instead of after a long
+		-- normal gap (which could outlast the whole event).
+		local nextAt = launchedAt + (harvestEvery or rng:NextNumber(M.HarvesterEveryMin, M.HarvesterEveryMax))
+		while running == gen and os.clock() < nextAt do
+			task.wait(0.25)
+			local every = harvestEvery
+			if every then
+				nextAt = math.min(nextAt, launchedAt + every)
+			end
+		end
 	end
 end
 

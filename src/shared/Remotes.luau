@@ -12,6 +12,7 @@ local NAMES = {
 	"BuyItem", -- (itemId: string) buy a cosmetic with coins
 	"EquipItem", -- (itemId: string) equip (emotes: toggle in/out of the emote wheel)
 	"Emote", -- (itemId: string)
+	"SetAfk", -- (afk: boolean) go AFK (sit out the next rounds) or come back
 	-- server -> client
 	"EggFired", -- (eggId: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number, eggSkin: string)
 	"EggHit", -- (eggId: string, position: Vector3, hitEffect: string)

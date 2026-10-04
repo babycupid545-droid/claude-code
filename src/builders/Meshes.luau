@@ -79,7 +79,8 @@ local function proportionsMatch(part: MeshPart, size: Vector3): boolean
 		lo = math.min(lo, r)
 		hi = math.max(hi, r)
 	end
-	return hi / lo < 1.25
+	-- Tight enough to also catch meshes from an older version of the model.
+	return hi / lo < 1.08
 end
 
 -- Returns every imported region of `asset`, or nil if any is missing or looks wrong.
@@ -99,7 +100,7 @@ function Meshes.regions(asset: string): { [string]: MeshPart }?
 			return nil
 		end
 		if not proportionsMatch(part, region.size) then
-			warnOnce(asset, `{asset}__{key} looks rotated; re-import {entry.file} with World Up = Y (default). Using the part-built version`)
+			warnOnce(asset, `{asset}__{key} doesn't match the current model: delete the old {asset} meshes from ReplicatedStorage.Assets.Meshes and import assets/models/{entry.file} again. Using the part-built version for now`)
 			return nil
 		end
 		out[key] = part

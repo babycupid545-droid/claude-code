@@ -61,9 +61,19 @@ and everyone spawns in the lobby). **Ctrl+Z** undoes the whole build.
   in the Output window.
 - **GUI updates:** when a new version of the game changes the GUI design, running the command
   replaces the old ScreenGuis and moves them to `ServerStorage > OldGui` (so customisations
-  aren't lost). Delete that folder when you don't need it.
+  aren't lost). Delete that folder when you don't need it. If you forget, the game builds the
+  new GUI at runtime and warns in Output.
+- **GUI layout:** every screen is designed in pixels for a 1280x720 screen inside its `Root`
+  frame, and the game scales `Root` to fit each device (a bit bigger on phones, where the
+  objective card moves to the top and the buttons to the left so the thumbstick has room).
+  Sizes and positions you set in Studio are in those 1280x720 pixels.
 
 ## 3. Import the 3D models (smooth chicken, cars, props)
+
+> **Updating from an earlier version?** The chicken model changed. In
+> `ReplicatedStorage > Assets > Meshes`, delete the old **Chicken** model, import the new
+> `Chicken.glb` (or `Chicken.fbx`) and run the build command; the chickens rebuild themselves.
+> Until you do, Output says the chicken meshes don't match and the part-built chicken is used.
 
 The smooth chicken, the cars and the farm props were modelled in Blender (`tools/blender`) and
 exported as three files:
@@ -164,4 +174,4 @@ get in Studio. Studio lighting (shadows, haze, bloom) makes it look better than 
 | ![Props](previews/blender_props.jpg) | ![Vehicles](previews/blender_cars.jpg) |
 | ![Vote](previews/ui-vote.jpg) | ![Lobby](previews/world-lobby.jpg) |
 | ![In round](previews/ui-round.jpg) | ![Results](previews/ui-results.jpg) |
-| ![Shop](previews/ui-shop.jpg) | ![Emotes](previews/ui-emotes.jpg) |
+| ![Shop](previews/ui-shop.jpg) | ![Road Rage driver](previews/ui-driver.jpg) |

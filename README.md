@@ -43,6 +43,7 @@ The code lives in this repo and is synced into Studio with [Rojo](https://rojo.s
 | Shoot egg | Left click or E (aims at the mouse) | R2 | 🥚 button (aims where the camera looks) |
 | Road Rage driver | W/S pick lane, A/D send car | D-pad, X/B | On-screen buttons |
 | Emotes | 1–4, or the Emotes button | Emotes button | Emotes button |
+| Sit out rounds | AFK button (press BACK to rejoin) | AFK button | AFK button |
 
 ## Project layout
 

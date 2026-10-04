@@ -1,8 +1,12 @@
 --!strict
--- Drives the Hud ScreenGui (built in Studio, see src/builders/GuiBuilder.luau): round status
--- and timer, voting, the mode intro, 3-2-1-GO, results, kill feed, stamina, spectating,
--- the sudden death banner, the "run to the other side" sign, the event ribbon and
--- full-screen effects (danger edges, egg splat, flashes).
+-- Drives the Hud ScreenGui (built in Studio, see src/builders/GuiBuilder.luau):
+--   * the round card (top): what's happening, a timer and a progress bar; shows the current
+--     event while one is running
+--   * the stats bar (bottom): round time, chickens alive, your golden eggs (MenuUI)
+--   * the objective card (bottom left): what to do right now (run to the other side...)
+--   * the board (top right): players, alive first, with their wins
+--   * feed, voting, mode intro, 3-2-1-GO, results, sudden death, stamina, spectating, AFK,
+--     and full-screen effects (danger edges, egg splat, flashes)
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -31,21 +35,28 @@ local RoundUI = {}
 
 local player = Players.LocalPlayer
 
+local PINK = Color3.fromRGB(255, 118, 176)
+local GREEN = Color3.fromRGB(140, 230, 110)
+local ORANGE = Color3.fromRGB(255, 156, 46)
+local YELLOW = Color3.fromRGB(255, 204, 64)
+local RED = Color3.fromRGB(235, 80, 70)
+local CREAM = Color3.fromRGB(255, 246, 228)
+
 type ModeLook = { sprite: string, color: Color3 }
 local MODE_LOOKS: { [string]: ModeLook } = {
 	Solo = { sprite = "chickenRun", color = Color3.fromRGB(255, 150, 40) },
-	Teams = { sprite = "team", color = Color3.fromRGB(60, 160, 255) },
-	RushHour = { sprite = "lightning", color = Color3.fromRGB(160, 100, 255) },
-	RoadRage = { sprite = "angry", color = Color3.fromRGB(255, 80, 80) },
+	Teams = { sprite = "team", color = Color3.fromRGB(70, 160, 240) },
+	RushHour = { sprite = "lightning", color = Color3.fromRGB(160, 110, 230) },
+	RoadRage = { sprite = "angry", color = Color3.fromRGB(226, 74, 64) },
 }
 
 type StateLook = { title: string, sprite: string }
 local STATE_LOOKS: { [string]: StateLook } = {
-	Waiting = { title = "WAITING", sprite = "users" },
-	Voting = { title = "VOTE!", sprite = "vote" },
-	Starting = { title = "GET READY", sprite = "clock" },
-	InRound = { title = "CROSS!", sprite = "chickenRun" },
-	Results = { title = "ROUND OVER", sprite = "trophy" },
+	Waiting = { title = "Waiting for players", sprite = "users" },
+	Voting = { title = "Vote for a mode", sprite = "vote" },
+	Starting = { title = "Get ready...", sprite = "clock" },
+	InRound = { title = "Cross the road!", sprite = "chickenRun" },
+	Results = { title = "Round over", sprite = "trophy" },
 }
 
 local hud: ScreenGui
@@ -59,6 +70,10 @@ local roundCoins = 0
 local spectating = false
 local spectateIndex = 0
 local feedOrder = 0
+local endsAtStart = 0 -- when the current EndsAt countdown began (for the progress bar)
+local crossStart = 0
+local lastCrossSecond = -1
+local wasSafe: boolean? = nil
 
 local function decode(attribute: string, default: any): any
 	local raw = RoundState:GetAttribute(attribute)
@@ -84,12 +99,35 @@ local function state(): string
 	return if type(s) == "string" then s else "Waiting"
 end
 
+local function now(): number
+	return workspace:GetServerTimeNow()
+end
+
 local function secondsLeft(): number
 	local endsAt = RoundState:GetAttribute("EndsAt")
 	if type(endsAt) ~= "number" or endsAt <= 0 then
 		return -1
 	end
-	return math.max(0, endsAt - workspace:GetServerTimeNow())
+	return math.max(0, endsAt - now())
+end
+
+local function clock(seconds: number): string
+	local whole = math.ceil(seconds)
+	return string.format("%d:%02d", whole // 60, whole % 60)
+end
+
+local function currentEvent(): Events.Event?
+	local id = RoundState:GetAttribute("Event")
+	return if type(id) == "string" and id ~= "" then Events.get(id) else nil
+end
+
+local function currentMode(): Modes.Mode?
+	local id = RoundState:GetAttribute("ModeId")
+	return if type(id) == "string" then Modes.get(id) else nil
+end
+
+local function isAfk(): boolean
+	return player:GetAttribute("Afk") == true
 end
 
 -- Feed ----------------------------------------------------------------------------------------
@@ -98,8 +136,9 @@ local function pushFeed(text: string, icon: string?)
 	feedOrder += 1
 	local line = Gui.template(hud, "FeedLine")
 	line.LayoutOrder = -feedOrder -- newest on top
-	Sprites.set(line.Row.Icon, icon or "info")
-	line.Row.Text.Text = text
+	Sprites.set(line.Icon, icon or "info")
+	line.Text.Text = text
+	line.Visible = false
 	line.Parent = ui.feed
 	Anim.pop(line)
 	local lines = {}
@@ -114,7 +153,7 @@ local function pushFeed(text: string, icon: string?)
 		end)
 		lines[#lines]:Destroy()
 	end
-	task.delay(6, function()
+	task.delay(7, function()
 		if line.Parent then
 			Anim.hide(line, function()
 				line:Destroy()
@@ -135,10 +174,13 @@ local function updateVoteCounts()
 	end
 	for id, card in voteCards do
 		local c = counts[id] or 0
-		local content = card.Face.Content
-		content.Bar.Votes.Text = tostring(c)
-		Anim.tween(content.Bar.Fill, 0.35, { Size = UDim2.fromScale(if total > 0 then c / total else 0, 1) })
-		card.Check.Visible = myVote == id
+		local inner = card.Border.Inner
+		inner.Bar.Votes.Text = if c == 1 then "1 vote" else `{c} votes`
+		Anim.tween(inner.Bar.Fill, 0.35, { Size = UDim2.fromScale(if total > 0 then c / total else 0, 1) })
+		local mine = myVote == id
+		card.Check.Visible = mine
+		card.Border.UIStroke.Color = if mine then GREEN else Color3.fromRGB(236, 178, 86)
+		card.Border.UIStroke.Thickness = if mine then 3 else 2
 	end
 end
 
@@ -155,21 +197,28 @@ local function rebuildVotes()
 			local card = Gui.template(hud, "VoteCard")
 			card.Name = id
 			card.LayoutOrder = i
-			card.Face.BackgroundColor3 = look.color
-			card.Base.BackgroundColor3 = look.color:Lerp(Color3.new(0, 0, 0), 0.45)
-			local content = card.Face.Content
-			Sprites.set(content.Icon, look.sprite)
-			content.ModeName.Text = string.upper(mode.name)
-			content.Desc.Text = mode.description
+			card.Visible = false
+			local inner = card.Border.Inner
+			inner.Band.BackgroundColor3 = look.color
+			inner.Bar.Fill.BackgroundColor3 = look.color
+			inner.Bar.Fill.Size = UDim2.fromScale(0, 1)
+			Sprites.set(inner.Icon, look.sprite)
+			inner.ModeName.Text = string.upper(mode.name)
+			inner.Desc.Text = mode.description
 			card.Parent = ui.vote.Cards
 			Anim.juice(card)
-			Anim.pop(card, 0.08 * i)
+			Anim.pop(card, 0.07 * i)
 			card.Activated:Connect(function()
+				if isAfk() then
+					Sfx.play("Error")
+					Anim.shake(card, 4, 0.25)
+					return
+				end
 				if myVote ~= id then
 					myVote = id
 					Remotes.Vote:FireServer(id)
 					Sfx.play("Vote")
-					Anim.punch(card, 0.12)
+					Anim.punch(card, 0.08)
 					updateVoteCounts()
 				end
 			end)
@@ -182,16 +231,16 @@ end
 -- Big moments ---------------------------------------------------------------------------------
 
 local function showIntro()
-	local id = RoundState:GetAttribute("ModeId")
-	local mode = if type(id) == "string" then Modes.get(id) else nil
+	local mode = currentMode()
 	if not mode then
 		return
 	end
 	local look = MODE_LOOKS[mode.id] or MODE_LOOKS.Solo
-	Sprites.set(ui.intro.Icon, look.sprite)
-	ui.intro.Title.Text = string.upper(mode.name)
-	ui.intro.Title.TextColor3 = look.color:Lerp(Color3.new(1, 1, 1), 0.25)
-	ui.intro.Desc.Text = mode.description
+	local inner = ui.intro.Inner
+	Sprites.set(inner.Icon, look.sprite)
+	inner.Title.Text = string.upper(mode.name)
+	inner.Title.TextColor3 = look.color
+	inner.Desc.Text = mode.description
 	Anim.pop(ui.intro)
 	Sfx.play("UiOpen")
 end
@@ -201,11 +250,11 @@ local function showCountdownNumber(n: number)
 		Anim.hide(ui.intro)
 	end
 	ui.countdown.Number.Text = tostring(n)
-	ui.countdown.Number.TextColor3 = Color3.fromRGB(255, 220, 80)
+	ui.countdown.Number.TextColor3 = YELLOW
 	if not ui.countdown.Visible then
 		Anim.pop(ui.countdown)
 	else
-		Anim.punch(ui.countdown, 0.35)
+		Anim.punch(ui.countdown, 0.2)
 	end
 	Sfx.play(if n == 1 then "TickFinal" else "Tick")
 end
@@ -213,22 +262,22 @@ end
 local function flash(color: Color3, strength: number)
 	ui.flash.BackgroundColor3 = color
 	ui.flash.BackgroundTransparency = 1 - strength
-	Anim.tween(ui.flash, 0.5, { BackgroundTransparency = 1 })
+	Anim.tween(ui.flash, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 })
 end
 
 local function showGo()
 	Anim.hide(ui.intro)
 	ui.countdown.Number.Text = "GO!"
-	ui.countdown.Number.TextColor3 = Color3.fromRGB(110, 240, 120)
+	ui.countdown.Number.TextColor3 = GREEN
 	if not ui.countdown.Visible then
 		Anim.pop(ui.countdown)
 	else
-		Anim.punch(ui.countdown, 0.5)
+		Anim.punch(ui.countdown, 0.25)
 	end
 	Sfx.play("Go")
 	Sfx.play("Whistle")
-	CameraFx.fovPunch(12)
-	flash(Color3.new(1, 1, 1), 0.35)
+	CameraFx.fovPunch(10)
+	flash(Color3.new(1, 1, 1), 0.2)
 	task.delay(0.9, function()
 		Anim.hide(ui.countdown)
 	end)
@@ -237,31 +286,32 @@ end
 local function showResults()
 	local message = RoundState:GetAttribute("Message")
 	local iWon = table.find(winners, player.UserId) ~= nil
-	local title = ui.results.Title
+	local inner = ui.results.Card.Inner
+	local title = inner.Title
 	if iWon then
 		title.Text = "YOU WIN!"
-		title.TextColor3 = Color3.fromRGB(255, 220, 70)
+		title.TextColor3 = ORANGE
 		Sprites.set(ui.results.Icon, "crown")
 		Sfx.play("Fanfare")
 		MusicController.duck(3)
-		flash(Color3.fromRGB(255, 240, 180), 0.5)
+		flash(Color3.fromRGB(255, 240, 180), 0.3)
 	elseif #winners > 0 then
 		title.Text = "WINNER!"
-		title.TextColor3 = Color3.fromRGB(255, 220, 70)
+		title.TextColor3 = ORANGE
 		Sprites.set(ui.results.Icon, "trophy")
 	else
 		title.Text = "NOBODY MADE IT"
-		title.TextColor3 = Color3.fromRGB(255, 120, 120)
-		Sprites.set(ui.results.Icon, "skull")
+		title.TextColor3 = RED
+		Sprites.set(ui.results.Icon, "eggCrack")
 	end
-	ui.results.Winner.Text = if type(message) == "string" then message else ""
-	ui.results.Reward.Visible = false
+	inner.Winner.Text = if type(message) == "string" then message else ""
+	inner.Reward.Visible = false
 	Anim.pop(ui.results)
-	-- Coins from the round arrive as toasts right after; tally them on the results card.
+	-- Eggs from the round arrive as toasts right after; tally them on the results card.
 	task.delay(0.9, function()
 		if state() == "Results" and roundCoins > 0 then
-			Anim.pop(ui.results.Reward)
-			Anim.countTo(ui.results.Reward.Row.Label, 0, roundCoins, 1, function(n)
+			Anim.pop(inner.Reward)
+			Anim.countTo(inner.Reward.Label, 0, roundCoins, 1, function(n)
 				return `+{math.floor(n + 0.5)}`
 			end)
 			Sfx.play("Coin")
@@ -271,37 +321,49 @@ end
 
 local function showSuddenDeath()
 	local banner = ui.suddenDeath
-	banner.Position = UDim2.fromScale(-0.7, 0.3)
+	banner.Position = UDim2.fromScale(-0.8, 0.3)
 	banner.Visible = true
-	Anim.tween(banner, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.fromScale(0.5, 0.3) })
+	Anim.tween(banner, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.fromScale(0.5, 0.3) })
 	Sfx.play("SuddenDeath")
-	CameraFx.shake(0.6)
-	flash(Color3.fromRGB(255, 60, 60), 0.35)
+	CameraFx.shake(0.5)
+	flash(Color3.fromRGB(255, 60, 60), 0.25)
 	task.delay(2.6, function()
-		local t = Anim.tween(banner, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In), { Position = UDim2.fromScale(1.7, 0.3) })
+		local t = Anim.tween(banner, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.In), { Position = UDim2.fromScale(1.8, 0.3) })
 		t.Completed:Once(function()
 			banner.Visible = false
 		end)
 	end)
 end
 
+local splatToken = 0
 local function showEggSplat()
+	splatToken += 1
+	local token = splatToken
 	local splat = ui.splat
 	splat.Rotation = math.random(-30, 30)
 	splat.Position = UDim2.fromScale(0.3 + math.random() * 0.4, 0.3 + math.random() * 0.3)
+	local start = splat.Position
 	splat.ImageTransparency = 0
 	local emoji = splat:FindFirstChild("SpriteEmoji")
 	if emoji then
 		emoji.TextTransparency = 0
 	end
-	Anim.pop(splat)
+	splat.Visible = true
+	local scale = Anim.scaleOf(splat)
+	scale.Scale = 0.6
+	Anim.tween(scale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
 	task.delay(0.8, function()
-		Anim.tween(splat, 1.4, { ImageTransparency = 1, Position = splat.Position + UDim2.fromScale(0, 0.08) })
+		if token ~= splatToken then
+			return
+		end
+		Anim.tween(splat, 1.4, { ImageTransparency = 1, Position = start + UDim2.fromScale(0, 0.08) })
 		if emoji then
 			Anim.tween(emoji, 1.4, { TextTransparency = 1 })
 		end
 		task.delay(1.5, function()
-			splat.Visible = false
+			if token == splatToken then
+				splat.Visible = false
+			end
 		end)
 	end)
 end
@@ -330,12 +392,177 @@ local function spectate(step: number)
 	if humanoid then
 		spectating = true
 		workspace.CurrentCamera.CameraSubject = humanoid
-		ui.spectateBar.NamePill.Row.Player.Text = target.DisplayName
+		ui.spectateBar.NameCard.Inner.Player.Text = target.DisplayName
 		if not ui.spectateBar.Visible then
 			Anim.pop(ui.spectateBar)
 		else
-			Anim.punch(ui.spectateBar.NamePill, 0.1)
+			Anim.punch(ui.spectateBar.NameCard, 0.06)
 		end
+	end
+end
+
+-- Objective card ---------------------------------------------------------------------------------
+
+local objectiveKey = ""
+local function setObjective(key: string, title: string, sub: string, color: Color3, sprite: string)
+	local inner = ui.objective.Inner
+	inner.Title.Text = title
+	inner.Sub.Text = sub
+	inner.Title.TextColor3 = color
+	if key ~= objectiveKey then
+		objectiveKey = key
+		Sprites.set(inner.Icon, sprite)
+		Anim.punch(ui.objective, 0.06)
+	end
+end
+
+local function onCrossTarget()
+	crossStart = now()
+	lastCrossSecond = -1
+	wasSafe = nil
+	local target = RoundState:GetAttribute("CrossTarget")
+	if type(target) == "string" and target ~= "" and player:GetAttribute("Alive") == true then
+		Anim.shake(ui.objective, 6, 0.35)
+	end
+end
+
+local function renderObjective(s: string, alive: boolean)
+	local inner = ui.objective.Inner
+	local bar = inner.Bar
+	if isAfk() then
+		bar.Visible = false
+		setObjective("afk", "YOU'RE AFK", "You'll sit out rounds until you press BACK.", YELLOW, "clock")
+		return
+	end
+	if s == "InRound" and alive then
+		local target = RoundState:GetAttribute("CrossTarget")
+		local deadline = RoundState:GetAttribute("CrossDeadline")
+		if type(target) == "string" and target ~= "" and type(deadline) == "number" then
+			local left = math.max(0, deadline - now())
+			local total = math.max(1, deadline - crossStart)
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local safe = root ~= nil and Layout.zoneOf(root.Position.Z) == target
+			local name = string.upper(Layout.sideName(target))
+			local leaving = string.lower(Layout.sideName(if target == "A" then "B" else "A"))
+			local whole = math.ceil(left)
+			if safe then
+				setObjective("safe" .. target, "SAFE! HOLD ON...", `The {leaving} side crumbles in {whole}s.`, GREEN, if target == "A" then "barn" else "windmill")
+			else
+				setObjective("run" .. target, `RUN TO THE {name}!`, `The {leaving} side crumbles in {whole}s.`, PINK, if target == "A" then "barn" else "windmill")
+			end
+			if safe ~= wasSafe then
+				if safe and wasSafe ~= nil then
+					Sfx.play("Coin", { pitch = 1.4, volume = 0.4 })
+				end
+				wasSafe = safe
+			end
+			bar.Visible = true
+			local urgent = left <= Config.Shuttle.Warning and not safe
+			bar.Fill.Size = UDim2.fromScale(math.clamp(left / total, 0, 1), 1)
+			bar.Fill.BackgroundColor3 = if urgent then RED elseif safe then GREEN else YELLOW
+			if whole ~= lastCrossSecond then
+				lastCrossSecond = whole
+				if urgent and whole > 0 then
+					Anim.punch(ui.objective, 0.04)
+					Sfx.play(if whole <= 1 then "TickFinal" else "Tick", { volume = 0.55 })
+				end
+			end
+			return
+		end
+	end
+	bar.Visible = false
+	local mode = currentMode()
+	if s == "InRound" then
+		if player:GetAttribute("Driver") == true then
+			setObjective("driver", "ROAD RAGE!", "Pick a lane and send cars at the chickens.", RED, "angry")
+		else
+			setObjective("out", "YOU GOT SQUASHED", "Spectate the survivors or wait for the next round.", RED, "eggCrack")
+		end
+	elseif s == "Starting" then
+		setObjective("start" .. (if mode then mode.id else ""), "GET READY!", if mode then mode.description else "The round is about to start.", ORANGE, "clock")
+	elseif s == "Voting" then
+		setObjective("vote", "VOTE FOR A MODE", "Pick the next game below.", PINK, "vote")
+	elseif s == "Results" then
+		setObjective("results", "ROUND OVER", "Next round starts in a moment.", ORANGE, "trophy")
+	else
+		local message = RoundState:GetAttribute("Message")
+		setObjective(
+			"wait",
+			"WAITING FOR CHICKENS",
+			if type(message) == "string" and message ~= "" then message else "The game starts when enough chickens are here.",
+			PINK,
+			"chick"
+		)
+	end
+end
+
+-- Board -------------------------------------------------------------------------------------------
+
+local lastBoard = 0
+local function wins(p: Player): number
+	local stats = p:FindFirstChild("leaderstats")
+	local w = stats and stats:FindFirstChild("Wins")
+	return if w and w:IsA("IntValue") then w.Value else 0
+end
+
+local function renderBoard(s: string)
+	if os.clock() - lastBoard < 0.5 then
+		return
+	end
+	lastBoard = os.clock()
+	local inner = ui.board.Inner
+	local inRound = s == "InRound" or s == "Starting"
+	local players = Players:GetPlayers()
+	table.sort(players, function(a, b)
+		if inRound then
+			local aa, ba = a:GetAttribute("Alive") == true, b:GetAttribute("Alive") == true
+			if aa ~= ba then
+				return aa
+			end
+		end
+		local wa, wb = wins(a), wins(b)
+		if wa ~= wb then
+			return wa > wb
+		end
+		return a.DisplayName < b.DisplayName
+	end)
+	local mode = currentMode()
+	if inRound then
+		inner.Title.Text = if mode then string.upper(mode.name) else "ROUND"
+		local total = RoundState:GetAttribute("RoundPlayers")
+		local alive = #alivePlayers()
+		inner.Big.Text = if type(total) == "number" and total > 0 then `{alive} OF {total} LEFT` else `{alive} LEFT`
+	else
+		inner.Title.Text = "TOP CHICKENS"
+		inner.Big.Text = `{#players} IN LOBBY`
+	end
+	local rows = inner.Rows
+	local existing = {}
+	for _, child in rows:GetChildren() do
+		if child:IsA("Frame") then
+			table.insert(existing, child)
+		end
+	end
+	local shown = math.min(#players, 8)
+	for i = 1, shown do
+		local p = players[i]
+		local row = existing[i]
+		if not row then
+			row = Gui.template(hud, "BoardRow")
+			row.Parent = rows
+		end
+		row.LayoutOrder = i
+		row.Rank.Text = `{i}.`
+		row.Player.Text = p.DisplayName .. (if p:GetAttribute("Afk") == true then " (AFK)" else "")
+		row.Value.Text = tostring(wins(p))
+		local out = inRound and p:GetAttribute("Alive") ~= true
+		row.Player.TextTransparency = if out then 0.55 else 0
+		row.Rank.TextTransparency = if out then 0.55 else 0
+		row.BackgroundColor3 = if p == player then Color3.fromRGB(255, 214, 170) else Color3.fromRGB(244, 230, 204)
+		row.BackgroundTransparency = if p == player then 0 else 0.2
+	end
+	for i = shown + 1, #existing do
+		existing[i]:Destroy()
 	end
 end
 
@@ -343,10 +570,7 @@ end
 
 local function onStateChanged()
 	local s = state()
-	local look = STATE_LOOKS[s] or STATE_LOOKS.Waiting
-	ui.title.Text = look.title
-	Sprites.set(ui.statusIcon, look.sprite)
-	Anim.punch(ui.status, 0.12)
+	endsAtStart = now()
 
 	if s == "Voting" then
 		myVote = nil
@@ -373,176 +597,132 @@ local function onStateChanged()
 			resetCamera()
 		end
 	end
-	local inRound = s == "Starting" or s == "InRound"
-	Anim.setShown(ui.mode, inRound)
-	Anim.setShown(ui.alive, inRound)
-	if inRound then
-		local id = RoundState:GetAttribute("ModeId")
-		local mode = if type(id) == "string" then Modes.get(id) else nil
-		local modeLook = MODE_LOOKS[if mode then mode.id else "Solo"] or MODE_LOOKS.Solo
-		Sprites.set(ui.mode.Row.Icon, modeLook.sprite)
-		ui.mode.Row.Label.Text = if mode then string.upper(mode.name) else ""
-	end
+	Anim.punch(ui.roundCard, 0.06)
 	lastState = s
 	lastSecond = -1
+	lastBoard = 0
 end
 
--- Crossing sign and event ribbon --------------------------------------------------------------
-
-local crossStart = 0
-local lastCrossSecond = -1
-local wasSafe: boolean? = nil
-
-local function onCrossTarget()
-	local cross = ui.cross
-	if not cross then
-		return
-	end
-	local target = RoundState:GetAttribute("CrossTarget")
-	if type(target) ~= "string" or target == "" then
-		Anim.setShown(cross, false)
-		return
-	end
-	crossStart = workspace:GetServerTimeNow()
-	lastCrossSecond = -1
-	wasSafe = nil
-	Sprites.set(cross.Icon, if target == "A" then "barn" else "windmill")
-	if player:GetAttribute("Alive") == true then
-		Anim.pop(cross)
-		Anim.shake(cross, 6, 0.4)
-	end
-end
-
+local lastEvent: string? = nil
 local function onEvent()
-	local banner = ui.event
-	if not banner then
+	local event = currentEvent()
+	local id = if event then event.id else nil
+	if id == lastEvent then
 		return
 	end
-	local id = RoundState:GetAttribute("Event")
-	local event = if type(id) == "string" and id ~= "" then Events.get(id) else nil
-	if not event then
-		if banner.Visible then
-			Anim.hide(banner)
-		end
-		return
-	end
-	banner.Label.Text = event.name
-	banner.Desc.Text = event.description
-	banner.Band.BackgroundColor3 = event.color
-	banner.Art.ImageColor3 = event.color:Lerp(Color3.new(1, 1, 1), 0.35)
-	Sprites.set(banner.Icon, event.sprite)
-	Anim.pop(banner)
-	Anim.shine(banner.Band)
-	Sfx.play("Whistle", { pitch = 1.1 })
-end
-
-local function renderBanners(s: string, alive: boolean)
-	local cross = ui.cross
-	if cross then
-		local target = RoundState:GetAttribute("CrossTarget")
-		local deadline = RoundState:GetAttribute("CrossDeadline")
-		local active = s == "InRound" and alive and type(target) == "string" and target ~= "" and type(deadline) == "number"
-		Anim.setShown(cross, active)
-		if active then
-			local now = workspace:GetServerTimeNow()
-			local left = math.max(0, (deadline :: number) - now)
-			local total = math.max(1, (deadline :: number) - crossStart)
-			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-			local safe = root ~= nil and Layout.zoneOf(root.Position.Z) == target
-			local name = string.upper(Layout.sideName(target :: string))
-			if safe ~= wasSafe then
-				wasSafe = safe
-				cross.Label.Text = if safe then "SAFE! HOLD ON..." else `RUN TO THE {name}!`
-				cross.Label.TextColor3 = if safe then Color3.fromRGB(170, 255, 150) else Color3.new(1, 1, 1)
-				Anim.punch(cross, 0.12)
-				if safe then
-					Sfx.play("Coin", { pitch = 1.4, volume = 0.4 })
-				end
-			end
-			local fill = cross.Track.Fill
-			fill.Size = UDim2.fromScale(math.clamp(left / total, 0, 1), 1)
-			local urgent = left <= Config.Shuttle.Warning and not safe
-			fill.BackgroundColor3 = if urgent then Color3.fromRGB(255, 80, 80) elseif left / total < 0.5 then Color3.fromRGB(255, 205, 64) else Color3.fromRGB(104, 196, 72)
-			local whole = math.ceil(left)
-			cross.TimePill.Time.Text = tostring(whole)
-			if whole ~= lastCrossSecond then
-				lastCrossSecond = whole
-				if urgent and whole > 0 then
-					Anim.punch(cross.TimePill, 0.25)
-					Sfx.play(if whole <= 1 then "TickFinal" else "Tick", { volume = 0.6 })
-				end
-			end
-			cross.TimePill.BackgroundColor3 = if urgent then Color3.fromRGB(255, 80, 80) else Color3.fromRGB(255, 205, 64)
-		end
-	end
-
-	local banner = ui.event
-	if banner and banner.Visible then
-		local endsAt = RoundState:GetAttribute("EventEndsAt")
-		if type(endsAt) == "number" and endsAt > 0 then
-			banner.Time.Text = tostring(math.ceil(math.max(0, endsAt - workspace:GetServerTimeNow())))
-		else
-			banner.Time.Text = ""
-		end
-		if s ~= "InRound" and s ~= "Starting" then
-			Anim.hide(banner)
-		end
+	lastEvent = id
+	if event then
+		Anim.punch(ui.roundCard, 0.12)
+		Anim.shake(ui.roundCard, 5, 0.3)
+		Sfx.play("Whistle", { pitch = 1.1 })
+		pushFeed(`{event.name}: {event.description}`, event.sprite)
 	end
 end
 
 local lastAlive = -1
 local wasAlive = false
+local lastRoundCardKey = ""
+
+local function renderRoundCard(s: string, left: number)
+	local inner = ui.roundCard.Inner
+	local event = currentEvent()
+	local title: string, sprite: string, color: Color3
+	local timeLeft: number, total: number
+	if event and s == "InRound" then
+		local endsAt = RoundState:GetAttribute("EventEndsAt")
+		title, sprite, color = event.name, event.sprite, event.color
+		timeLeft = if type(endsAt) == "number" and endsAt > 0 then math.max(0, endsAt - now()) else -1
+		total = Config.Events.Duration
+	else
+		local look = STATE_LOOKS[s] or STATE_LOOKS.Waiting
+		local mode = currentMode()
+		title, sprite, color = look.title, look.sprite, ORANGE
+		if s == "InRound" and mode then
+			title = mode.name
+			local modeLook = MODE_LOOKS[mode.id]
+			if modeLook then
+				sprite, color = modeLook.sprite, modeLook.color
+			end
+		end
+		timeLeft = left
+		local endsAt = RoundState:GetAttribute("EndsAt")
+		total = if type(endsAt) == "number" then endsAt - endsAtStart else 1
+	end
+	local key = title .. sprite
+	if key ~= lastRoundCardKey then
+		lastRoundCardKey = key
+		inner.Title.Text = title
+		Sprites.set(inner.Icon, sprite)
+	end
+	inner.Time.Text = if timeLeft >= 0 then clock(timeLeft) else "--"
+	inner.Bar.Visible = timeLeft >= 0
+	inner.Bar.Fill.BackgroundColor3 = color
+	if timeLeft >= 0 then
+		inner.Bar.Fill.Size = UDim2.fromScale(math.clamp(timeLeft / math.max(total, 1), 0, 1), 1)
+	end
+end
 
 local function render()
 	local s = state()
 	local left = secondsLeft()
+	local alive = player:GetAttribute("Alive") == true
 
-	-- Timer, pulsing red over the last 5 seconds.
+	renderRoundCard(s, left)
+
+	-- Timer in the stats bar, turning red over the last 5 seconds.
+	local timeLabel = ui.stats.Inner.Row.Time.Label
 	if left >= 0 then
 		local whole = math.ceil(left)
-		ui.timer.Text = string.format("%d:%02d", whole // 60, whole % 60)
+		timeLabel.Text = clock(left)
 		if whole ~= lastSecond then
 			lastSecond = whole
 			local urgent = whole <= 5 and (s == "InRound" or s == "Voting")
-			ui.timerPill.BackgroundColor3 = if urgent then Color3.fromRGB(255, 80, 80) else Color3.fromRGB(255, 201, 60)
+			timeLabel.TextColor3 = if urgent then RED else CREAM
 			if urgent then
-				Anim.punch(ui.timerPill, 0.15)
+				Anim.punch(ui.stats.Inner.Row.Time, 0.15)
 			end
 			if s == "Starting" and whole >= 1 and whole <= 3 then
 				showCountdownNumber(whole)
 			end
 		end
 	else
-		ui.timer.Text = "--"
+		timeLabel.Text = "--"
 	end
 	if s == "Voting" then
-		ui.vote.Header.Row.Timer.Text = tostring(math.ceil(math.max(left, 0)))
-	elseif s == "Waiting" then
-		local message = RoundState:GetAttribute("Message")
-		ui.title.Text = if type(message) == "string" and message ~= "" then string.upper(message) else "WAITING"
+		ui.vote.Header.Inner.Timer.Text = tostring(math.ceil(math.max(left, 0)))
 	end
 
 	-- Chickens left.
 	local count = #alivePlayers()
-	if count ~= lastAlive then
-		lastAlive = count
-		ui.alive.Row.Label.Text = `{count} LEFT`
-		if ui.alive.Visible then
-			Anim.punch(ui.alive, 0.2)
+	local total = RoundState:GetAttribute("RoundPlayers")
+	local inRound = s == "InRound" or s == "Starting"
+	local aliveText = if inRound and type(total) == "number" and total > 0 then `{count}/{total}` else tostring(#Players:GetPlayers())
+	local aliveLabel = ui.stats.Inner.Row.Alive.Label
+	if aliveLabel.Text ~= aliveText then
+		aliveLabel.Text = aliveText
+		if count < lastAlive and inRound then
+			Anim.punch(ui.stats.Inner.Row.Alive, 0.2)
 		end
 	end
+	lastAlive = count
+
+	renderObjective(s, alive)
+	renderBoard(s)
 
 	-- Stamina.
-	local alive = player:GetAttribute("Alive") == true
-	local inRound = s == "InRound" or s == "Starting"
-	Anim.setShown(ui.stamina, inRound and alive)
+	Anim.setShown(ui.stamina, s == "InRound" and alive)
 	local fill = ui.stamina.Track.Fill
 	fill.Size = UDim2.fromScale(math.max(0.02, MovementController.getStamina()), 1)
-	fill.BackgroundColor3 = if MovementController.isGliding() then Color3.fromRGB(190, 240, 255) else Color3.new(1, 1, 1)
+	fill.BackgroundColor3 = if MovementController.isGliding() then Color3.fromRGB(150, 220, 255) else YELLOW
 
 	-- Spectate button for the eliminated.
 	local canSpectate = s == "InRound" and not alive and player:GetAttribute("Driver") ~= true
-	Anim.setShown(ui.spectateButton, canSpectate)
+	if ui.spectateButton.Visible ~= canSpectate then
+		ui.spectateButton.Visible = canSpectate
+		if canSpectate then
+			Anim.pop(ui.spectateButton)
+		end
+	end
 	if not canSpectate and spectating then
 		resetCamera()
 	end
@@ -554,51 +734,83 @@ local function render()
 		local pulse = 0.5 + 0.5 * math.sin(os.clock() * 20)
 		for _, edge in ui.danger:GetChildren() do
 			if edge:IsA("Frame") then
-				edge.BackgroundTransparency = 1 - danger * (0.55 + 0.45 * pulse)
+				edge.BackgroundTransparency = 1 - danger * (0.5 + 0.4 * pulse)
 			end
 		end
 	end
-
-	renderBanners(s, alive)
 
 	-- You just got eliminated.
 	if wasAlive and not alive and (s == "InRound" or s == "Starting") then
 		Sfx.play("Eliminated")
 		MusicController.duck(2.5)
-		flash(Color3.fromRGB(255, 70, 70), 0.4)
+		flash(Color3.fromRGB(255, 70, 70), 0.3)
 	end
 	wasAlive = alive
 end
 
+-- AFK ---------------------------------------------------------------------------------------------
+
+local function refreshAfk()
+	local afk = isAfk()
+	local inner = ui.afk.Border.Inner
+	if afk then
+		Gui.setButton(ui.afk, "BACK", ORANGE, "play")
+	else
+		Gui.setButton(ui.afk, "AFK", nil, "clock")
+		inner.BackgroundColor3 = Color3.fromRGB(44, 29, 20)
+		inner.BackgroundTransparency = 0.08
+		inner:SetAttribute("Accent", nil)
+	end
+	Anim.punch(ui.afk, 0.1)
+end
+
+-- Phones and tablets: keep the bottom-left corner free for the thumbstick.
+local function touchLayout()
+	if not Gui.isTouch() then
+		return
+	end
+	ui.objective.AnchorPoint = Vector2.new(0.5, 0)
+	ui.objective.Position = UDim2.new(0.5, 0, 0, 84)
+	ui.buttons.AnchorPoint = Vector2.new(0, 0.5)
+	ui.buttons.Position = UDim2.new(0, 12, 0.56, 0)
+	ui.buttons.Size = UDim2.fromOffset(140, 300)
+	local list = ui.buttons:FindFirstChildOfClass("UIListLayout")
+	if list then
+		list.FillDirection = Enum.FillDirection.Vertical
+	end
+	ui.feed.Size = UDim2.fromOffset(340, 100)
+end
+
 function RoundUI.start()
 	hud = Gui.screen("Hud")
+	local root = Gui.find(hud, "Root")
 	ui = {
-		status = Gui.find(hud, "Top/Status"),
-		statusIcon = Gui.find(hud, "Top/Status/Row/Icon"),
-		title = Gui.find(hud, "Top/Status/Row/Title"),
-		timerPill = Gui.find(hud, "Top/Status/Row/TimerPill"),
-		timer = Gui.find(hud, "Top/Status/Row/TimerPill/Timer"),
-		mode = Gui.find(hud, "Top/Info/Mode"),
-		alive = Gui.find(hud, "Top/Info/Alive"),
-		feed = Gui.find(hud, "Feed"),
-		stamina = Gui.find(hud, "Stamina"),
-		spectateBar = Gui.find(hud, "SpectateBar"),
-		spectateButton = Gui.find(hud, "Side/Small/Spectate"),
-		intro = Gui.find(hud, "Intro"),
-		countdown = Gui.find(hud, "Countdown"),
-		results = Gui.find(hud, "Results"),
-		suddenDeath = Gui.find(hud, "SuddenDeath"),
-		vote = Gui.find(hud, "Vote"),
-		splat = Gui.find(hud, "Splat"),
-		danger = Gui.find(hud, "Danger"),
-		flash = Gui.find(hud, "Flash"),
-		-- Added in GUI v2; older Studio-built HUDs just don't show them.
-		cross = hud:FindFirstChild("CrossBanner"),
-		event = hud:FindFirstChild("EventBanner"),
+		roundCard = Gui.find(root, "RoundCard"),
+		stats = Gui.find(root, "Stats"),
+		objective = Gui.find(root, "Objective"),
+		buttons = Gui.find(root, "Buttons"),
+		afk = Gui.find(root, "Buttons/Afk"),
+		spectateButton = Gui.find(root, "Buttons/Spectate"),
+		board = Gui.find(root, "Board"),
+		feed = Gui.find(root, "Feed"),
+		stamina = Gui.find(root, "Stamina"),
+		spectateBar = Gui.find(root, "SpectateBar"),
+		intro = Gui.find(root, "Intro"),
+		countdown = Gui.find(root, "Countdown"),
+		results = Gui.find(root, "Results"),
+		suddenDeath = Gui.find(root, "SuddenDeath"),
+		vote = Gui.find(root, "Vote"),
+		splat = Gui.find(root, "Splat"),
+		danger = Gui.find(root, "Danger"),
+		flash = Gui.find(root, "Flash"),
 	}
+	touchLayout()
 	Anim.autoJuice(hud)
 
 	RoundState:GetAttributeChangedSignal("State"):Connect(onStateChanged)
+	RoundState:GetAttributeChangedSignal("EndsAt"):Connect(function()
+		endsAtStart = now()
+	end)
 	RoundState:GetAttributeChangedSignal("VoteOptions"):Connect(function()
 		if state() == "Voting" then
 			rebuildVotes()
@@ -610,11 +822,12 @@ function RoundUI.start()
 			showSuddenDeath()
 		end
 	end)
-	onStateChanged()
 	RoundState:GetAttributeChangedSignal("CrossTarget"):Connect(onCrossTarget)
 	RoundState:GetAttributeChangedSignal("Event"):Connect(onEvent)
+	onStateChanged()
 	onCrossTarget()
-	onEvent()
+	local event = currentEvent()
+	lastEvent = if event then event.id else nil
 
 	Remotes.Feed.OnClientEvent:Connect(pushFeed)
 	Remotes.Knockback.OnClientEvent:Connect(showEggSplat)
@@ -630,6 +843,20 @@ function RoundUI.start()
 			roundCoins += amount
 		end
 	end)
+
+	ui.afk.Activated:Connect(function()
+		Remotes.SetAfk:FireServer(not isAfk())
+	end)
+	player:GetAttributeChangedSignal("Afk"):Connect(function()
+		refreshAfk()
+		if isAfk() and state() == "Voting" then
+			myVote = nil
+			updateVoteCounts()
+		end
+	end)
+	if isAfk() then
+		refreshAfk()
+	end
 
 	ui.spectateButton.Activated:Connect(function()
 		if spectating then

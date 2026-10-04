@@ -273,7 +273,7 @@ local function save()
 	}
 end
 
-local function onEvent()
+local function onEvent(quiet: boolean?)
 	local id = RoundState:GetAttribute("Event")
 	nightActive = id == "NightDrive"
 	if fireflies then
@@ -296,7 +296,7 @@ local function onEvent()
 	else
 		restoreLighting()
 	end
-	if type(id) == "string" and id ~= "" then
+	if type(id) == "string" and id ~= "" and not quiet then
 		Sfx.play("SuddenDeath", { volume = 0.6, pitch = 1.2 })
 	end
 end
@@ -337,6 +337,8 @@ function GameplayFx.start()
 	player:GetAttributeChangedSignal("Alive"):Connect(updateBeacon)
 	RoundState:GetAttributeChangedSignal("Event"):Connect(onEvent)
 	updateBeacon()
+	-- Joining mid-event (e.g. during Night Drive) should still look right.
+	onEvent(true)
 
 	Remotes.Sprinkler.OnClientEvent:Connect(function(index: number, phase: string)
 		if #sprinklerHeads == 0 then

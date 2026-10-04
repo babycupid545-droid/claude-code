@@ -5,7 +5,7 @@ way the client scripts would, dumps the instance tree as JSON and lays it out / 
 a small reimplementation of Roblox's UI layout rules.
 
 Usage: python3 tools/preview/render_gui.py <scenario> <out.png> --luau <luau> --fonts <dir>
-       scenarios: vote, round, results, shop, emotes, driver
+       scenarios: vote, round, go, intro, results, shop, emotes, afk, driver
 """
 
 import json
@@ -38,136 +38,184 @@ MODULES = ["src/shared/Config.luau", "src/shared/AssetIds.luau", "src/shared/UiS
 SCENARIO = r'''
 local scenario = "%s"
 local root = Instance.new("Folder")
-local function mod(path) return mockRequire(path) end
 local GuiBuilder = mockRequire(builders:FindFirstChild("GuiBuilder"))
 GuiBuilder.build(root)
 local Modes = mockRequire(shared:FindFirstChild("Modes"))
 local Cosmetics = mockRequire(shared:FindFirstChild("Cosmetics"))
 local hud, shop, emotesGui, driver = root.Hud, root.Shop, root.Emotes, root.Driver
+local H, S, E, D = hud.Root, shop.Root, emotesGui.Root, driver.Root
 local function setSprite(img, s) img:SetAttribute("Sprite", s) end
-local function tpl(folder, name) local c = folder[name]:Clone(); c.Visible = true; return c end
+local function tpl(screen, name) local c = screen.Templates[name]:Clone(); c.Visible = true; return c end
 local function setButton(b, text, color)
-	if text and b.Face.Content:FindFirstChild("Label") then b.Face.Content.Label.Text = text end
-	if color then
-		b.Face.BackgroundColor3 = color
-		b.Base.BackgroundColor3 = color:Lerp(Color3.new(0, 0, 0), 0.45)
-	end
+	local inner = b.Border.Inner
+	if text and inner.Content:FindFirstChild("Label") then inner.Content.Label.Text = text end
+	if color then inner.BackgroundColor3 = color; inner.BackgroundTransparency = 0 end
 end
-local out = {}
 local function feed(text, icon, i)
-	local line = tpl(hud.Templates, "FeedLine")
+	local line = tpl(hud, "FeedLine")
 	line.LayoutOrder = i
-	setSprite(line.Row.Icon, icon)
-	line.Row.Text.Text = text
-	line.Parent = hud.Feed
+	setSprite(line.Icon, icon)
+	line.Text.Text = text
+	line.Parent = H.Feed
 end
 local function toast(text, icon, color, i)
-	local t = tpl(hud.Templates, "Toast")
+	local t = tpl(hud, "Toast")
 	t.LayoutOrder = i
-	setSprite(t.Row.Icon, icon)
-	t.Row.Text.Text = text
-	t.Row.Text.TextColor3 = color
-	t.Parent = hud.Toasts
+	setSprite(t.Icon, icon)
+	t.Text.Text = text
+	t.Text.TextColor3 = color
+	t.Parent = H.Toasts
 end
-hud.Side.Coins.Row.Amount.Text = "1,250"
+local function board(title, big, names, outFrom)
+	H.Board.Inner.Title.Text = title
+	H.Board.Inner.Big.Text = big
+	for i, n in names do
+		local row = tpl(hud, "BoardRow")
+		row.LayoutOrder = i
+		row.Rank.Text = i .. "."
+		row.Player.Text = n[1]
+		row.Value.Text = tostring(n[2])
+		if outFrom and i >= outFrom then row.Player.TextTransparency = 0.55; row.Rank.TextTransparency = 0.55 end
+		if n[1] == "CJR2" then row.BackgroundColor3 = Color3.fromRGB(255, 214, 170); row.BackgroundTransparency = 0 end
+		row.Parent = H.Board.Inner.Rows
+	end
+end
+local players = { { "Quertosir", 19 }, { "SillyGoose_3", 18 }, { "CornyJokes", 15 }, { "Kentucky", 10 }, { "Clover_Patch", 10 }, { "CJR2", 4 } }
+H.Stats.Inner.Row.Eggs.Label.Text = "1,250"
+local function objective(title, sub, color, sprite)
+	H.Objective.Inner.Title.Text = title
+	H.Objective.Inner.Sub.Text = sub
+	if color then H.Objective.Inner.Title.TextColor3 = color end
+	if sprite then setSprite(H.Objective.Inner.Icon, sprite) end
+end
 if scenario == "vote" then
-	hud.Top.Status.Row.Title.Text = "VOTE!"
-	setSprite(hud.Top.Status.Row.Icon, "vote")
-	hud.Top.Status.Row.TimerPill.Timer.Text = "0:12"
-	hud.Vote.Visible = true
-	local looks = { Solo = { "chickenRun", Color3.fromRGB(255, 150, 40) }, Teams = { "team", Color3.fromRGB(60, 160, 255) }, RoadRage = { "angry", Color3.fromRGB(255, 80, 80) } }
+	H.RoundCard.Inner.Title.Text = "Vote for a mode"
+	setSprite(H.RoundCard.Inner.Icon, "vote")
+	H.RoundCard.Inner.Time.Text = "0:12"
+	H.RoundCard.Inner.Bar.Fill.Size = UDim2.fromScale(0.7, 1)
+	objective("VOTE FOR A MODE", "Pick the next game below.", nil, "vote")
+	board("TOP CHICKENS", "6 IN LOBBY", players)
+	H.Vote.Visible = true
+	H.Vote.Header.Inner.Timer.Text = "12"
+	local looks = { Solo = { "chickenRun", Color3.fromRGB(255, 150, 40) }, Teams = { "team", Color3.fromRGB(70, 160, 240) }, RoadRage = { "angry", Color3.fromRGB(226, 74, 64) } }
 	local votes = { Solo = 3, Teams = 1, RoadRage = 4 }
 	for i, id in { "Solo", "Teams", "RoadRage" } do
 		local mode = Modes.get(id)
-		local card = tpl(hud.Templates, "VoteCard")
+		local card = tpl(hud, "VoteCard")
 		card.LayoutOrder = i
-		setButton(card, nil, looks[id][2])
-		setSprite(card.Face.Content.Icon, looks[id][1])
-		card.Face.Content.ModeName.Text = string.upper(mode.name)
-		card.Face.Content.Desc.Text = mode.description
-		card.Face.Content.Bar.Fill.Size = UDim2.fromScale(votes[id] / 8, 1)
-		card.Face.Content.Bar.Votes.Text = tostring(votes[id])
+		local inner = card.Border.Inner
+		inner.Band.BackgroundColor3 = looks[id][2]
+		inner.Bar.Fill.BackgroundColor3 = looks[id][2]
+		setSprite(inner.Icon, looks[id][1])
+		inner.ModeName.Text = string.upper(mode.name)
+		inner.Desc.Text = mode.description
+		inner.Bar.Fill.Size = UDim2.fromScale(votes[id] / 8, 1)
+		inner.Bar.Votes.Text = votes[id] .. " votes"
 		card.Check.Visible = id == "RoadRage"
-		card.Parent = hud.Vote.Cards
+		if id == "RoadRage" then card.Border.UIStroke.Color = Color3.fromRGB(140, 230, 110); card.Border.UIStroke.Thickness = 3 end
+		card.Parent = H.Vote.Cards
 	end
 	feed("Cluckers joined the game", "info", 1)
 	feed("Henrietta egged Nugget to their doom!", "egg", 2)
 elseif scenario == "round" then
-	hud.Top.Status.Row.Title.Text = "CROSS!"
-	setSprite(hud.Top.Status.Row.Icon, "chickenRun")
-	hud.Top.Status.Row.TimerPill.Timer.Text = "1:42"
-	hud.Top.Info.Mode.Visible = true
-	hud.Top.Info.Mode.Row.Label.Text = "RUSH HOUR"
-	setSprite(hud.Top.Info.Mode.Row.Icon, "lightning")
-	hud.Top.Info.Alive.Visible = true
-	hud.Top.Info.Alive.Row.Label.Text = "7 LEFT"
-	hud.Stamina.Visible = true
-	hud.Stamina.Track.Fill.Size = UDim2.fromScale(0.65, 1)
+	H.RoundCard.Inner.Title.Text = "SPEED DEMONS"
+	setSprite(H.RoundCard.Inner.Icon, "lightning")
+	H.RoundCard.Inner.Time.Text = "0:08"
+	H.RoundCard.Inner.Bar.Fill.Size = UDim2.fromScale(0.35, 1)
+	H.RoundCard.Inner.Bar.Fill.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+	H.Stats.Inner.Row.Time.Label.Text = "2:32"
+	H.Stats.Inner.Row.Alive.Label.Text = "5/6"
+	objective("RUN TO THE WINDMILL!", "The barn side crumbles in 7s.", nil, "windmill")
+	H.Objective.Inner.Bar.Visible = true
+	H.Objective.Inner.Bar.Fill.Size = UDim2.fromScale(0.45, 1)
+	H.Objective.Inner.Bar.Fill.BackgroundColor3 = Color3.fromRGB(255, 204, 64)
+	board("RUSH HOUR", "5 OF 6 LEFT", players, 6)
+	H.Stamina.Visible = true
+	H.Stamina.Track.Fill.Size = UDim2.fromScale(0.65, 1)
 	feed("Nugget got flattened by a car", "car", 3)
 	feed("Henrietta egged Drumstick to their doom!", "egg", 2)
-	feed("Sidewalk A is collapsing! Cross the road!", "lightning", 1)
-	toast("+15 eggs knockout", "eggCoin", Color3.fromRGB(255, 201, 60), 1)
-	hud.CrossBanner.Visible = true
-	hud.CrossBanner.Label.Text = "RUN TO THE WINDMILL!"
-	hud.CrossBanner.TimePill.Time.Text = "7"
-	hud.CrossBanner.Track.Fill.Size = UDim2.fromScale(0.45, 1)
-	hud.CrossBanner.Track.Fill.BackgroundColor3 = Color3.fromRGB(255, 205, 64)
-	hud.EventBanner.Visible = true
-	hud.EventBanner.Time.Text = "18"
+	feed("SPEED DEMONS: Traffic goes much faster!", "lightning", 1)
+	toast("+15 eggs for a knockout", "eggCoin", Color3.fromRGB(255, 204, 64), 1)
 	toast("KNOCKOUT! Drumstick", "egg", Color3.fromRGB(255, 200, 90), 2)
-	hud.Countdown.Visible = true
-	hud.Countdown.Number.Text = "GO!"
-	hud.Countdown.Number.TextColor3 = Color3.fromRGB(110, 240, 120)
-	hud.Danger.Visible = true
+elseif scenario == "go" then
+	H.RoundCard.Inner.Title.Text = "Rush Hour"
+	setSprite(H.RoundCard.Inner.Icon, "lightning")
+	H.RoundCard.Inner.Time.Text = "3:00"
+	H.Stats.Inner.Row.Time.Label.Text = "3:00"
+	H.Stats.Inner.Row.Alive.Label.Text = "6/6"
+	objective("RUN TO THE WINDMILL!", "The barn side crumbles in 25s.", nil, "windmill")
+	board("RUSH HOUR", "6 OF 6 LEFT", players)
+	H.Countdown.Visible = true
+	H.Countdown.Number.Text = "GO!"
+	H.Countdown.Number.TextColor3 = Color3.fromRGB(140, 230, 110)
+	H.Danger.Visible = true
+elseif scenario == "intro" then
+	H.RoundCard.Inner.Title.Text = "Get ready..."
+	H.RoundCard.Inner.Time.Text = "0:04"
+	objective("GET READY!", "Every chicken for itself. Last one alive wins.", Color3.fromRGB(255, 156, 46), "clock")
+	board("SOLO", "6 OF 6 LEFT", players)
+	H.Intro.Visible = true
 elseif scenario == "results" then
-	hud.Top.Status.Row.Title.Text = "ROUND OVER"
-	setSprite(hud.Top.Status.Row.Icon, "trophy")
-	hud.Top.Status.Row.TimerPill.Timer.Text = "0:05"
-	hud.Results.Visible = true
-	hud.Results.Title.Text = "YOU WIN!"
-	hud.Results.Winner.Text = "Henrietta crossed the road!"
-	hud.Results.Reward.Visible = true
-	hud.Results.Reward.Row.Label.Text = "+85"
-	toast("+50 eggs for winning!", "eggCoin", Color3.fromRGB(255, 201, 60), 1)
+	H.RoundCard.Inner.Title.Text = "Round over"
+	setSprite(H.RoundCard.Inner.Icon, "trophy")
+	H.RoundCard.Inner.Time.Text = "0:05"
+	objective("ROUND OVER", "Next round starts in a moment.", Color3.fromRGB(255, 156, 46), "trophy")
+	board("TOP CHICKENS", "6 IN LOBBY", players)
+	H.Results.Visible = true
+	H.Results.Card.Inner.Title.Text = "YOU WIN!"
+	H.Results.Card.Inner.Winner.Text = "CJR2 crossed the road!"
+	H.Results.Card.Inner.Reward.Visible = true
+	H.Results.Card.Inner.Reward.Label.Text = "+85"
+	toast("+50 eggs for winning!", "eggCoin", Color3.fromRGB(255, 204, 64), 1)
 elseif scenario == "shop" then
-	shop.Dim.Visible = true
-	shop.Panel.Visible = true
-	shop.Panel.Body.Header.Coins.Row.Amount.Text = "1,250"
-	setButton(shop.Panel.Body.Tabs.ChickenSkin, nil, Color3.fromRGB(80, 210, 100))
+	S.Dim.Visible = true
+	S.Panel.Visible = true
+	S.Panel.Inner.Header.Coins.Label.Text = "1,250"
+	setButton(S.Panel.Inner.Tabs.ChickenSkin, nil, Color3.fromRGB(255, 156, 46))
 	local states = { "EQUIPPED", "EQUIP", "250", "400", "900", "1200", "3000", "R$ 99", "300", "800" }
 	local i = 0
 	for _, item in Cosmetics.list do
 		if item.slot == "ChickenSkin" or (item.slot == "EggSkin" and i < 10) then
 			i += 1
 			if i > 10 then break end
-			local card = tpl(shop.Templates, "ItemCard")
+			local card = tpl(shop, "ItemCard")
 			card.LayoutOrder = i
+			local inner = card.Inner
 			local c = Cosmetics.rarityColors[item.rarity]
-			card.RarityGradient.Color = ColorSequence.new(c:Lerp(Color3.new(1, 1, 1), 0.15), c:Lerp(Color3.new(0, 0, 0), 0.45))
-			card.Glow.ImageColor3 = c
-			card.ItemName.Text = item.name
-			card.Rarity.Text = string.upper(item.rarity)
-			setSprite(card.PreviewIcon, if item.slot == "ChickenSkin" then "chicken" else "egg")
+			inner.RarityBar.RarityGradient.Color = ColorSequence.new(c:Lerp(Color3.new(1, 1, 1), 0.15), c:Lerp(Color3.new(0, 0, 0), 0.25))
+			inner.RarityBar.Rarity.Text = string.upper(item.rarity)
+			inner.Glow.ImageColor3 = c
+			inner.ItemName.Text = item.name
+			inner.Preview.Visible = false
+			inner.PreviewIcon.Visible = true
+			setSprite(inner.PreviewIcon, if item.slot == "ChickenSkin" then "chicken" else "egg")
 			local st = states[i]
-			local color = if st == "EQUIPPED" then Color3.fromRGB(150, 150, 170) elseif st == "EQUIP" then Color3.fromRGB(80, 210, 100) elseif st:sub(1, 2) == "R$" then Color3.fromRGB(255, 100, 170) else Color3.fromRGB(255, 150, 40)
-			setButton(card.Action, st, color)
-			card.Action.Face.Content.Icon.Visible = tonumber(st) ~= nil
+			local color = if st == "EQUIPPED" then Color3.fromRGB(150, 138, 126) elseif st == "EQUIP" then Color3.fromRGB(110, 200, 84) elseif st:sub(1, 2) == "R$" then Color3.fromRGB(255, 110, 170) else Color3.fromRGB(255, 156, 46)
+			setButton(inner.Action, st, color)
+			inner.Action.Border.Inner.Content.Icon.Visible = tonumber(st) ~= nil
 			card.Equipped.Visible = st == "EQUIPPED"
 			card.Lock.Visible = st ~= "EQUIPPED" and st ~= "EQUIP"
-			card.Parent = shop.Panel.Body.Grid
+			card.Parent = S.Panel.Inner.Grid
 		end
 	end
 elseif scenario == "emotes" then
-	emotesGui.Wheel.Visible = true
-	local names = { "BAWK!", "SPIN", "HAPPY HOP", "EMPTY" }
-	for i = 1, 4 do
-		setButton(emotesGui.Wheel["Slot" .. i], names[i], if i == 4 then Color3.fromRGB(150, 150, 170) else nil)
-	end
+	E.Picker.Visible = true
+	E.Picker.Position = UDim2.new(0, 132, 1, -68)
+	local names = { "BAWK!", "SPIN", "HAPPY HOP", "+ ADD" }
+	for i = 1, 4 do setButton(E.Picker.Inner.Slots["Slot" .. i], names[i]) end
+	objective("WAITING FOR CHICKENS", "The game starts when enough chickens are here.", nil, "chick")
+	board("TOP CHICKENS", "6 IN LOBBY", players)
+elseif scenario == "afk" then
+	objective("YOU'RE AFK", "You'll sit out rounds until you press BACK.", Color3.fromRGB(255, 204, 64), "clock")
+	setButton(H.Buttons.Afk, "BACK", Color3.fromRGB(255, 156, 46))
+	setSprite(H.Buttons.Afk.Border.Inner.Content.Icon, "play")
+	board("TOP CHICKENS", "6 IN LOBBY", players)
 elseif scenario == "driver" then
 	driver.Enabled = true
-	driver.Controls.Cooldown.Fill.Size = UDim2.fromScale(0.6, 1)
-	hud.Top.Status.Row.Title.Text = "CROSS!"
-	hud.Top.Status.Row.TimerPill.Timer.Text = "0:58"
+	D.Controls.Cooldown.Fill.Size = UDim2.fromScale(0.6, 1)
+	D.Controls.Cooldown.Hint.Text = "RELOADING 1.2"
+	objective("ROAD RAGE!", "Pick a lane and send cars at the chickens.", Color3.fromRGB(235, 80, 70), "angry")
+	H.Buttons.Spectate.Visible = false
 end
 print("JSON" .. dumpTree(root))
 '''
@@ -184,7 +232,7 @@ def font(name, size):
         else:
             f = ImageFont.truetype(os.path.join(fdir, "Fredoka.ttf"), size)
             try:
-                f.set_variation_by_name("SemiBold")
+                f.set_variation_by_name("Bold" if name == "FredokaOne" else "SemiBold")
             except Exception:
                 pass
         FONTS[key] = f
@@ -257,12 +305,36 @@ def udim2(v, default=(0, 0, 0, 0)):
     return v["udim2"] if v else default
 
 
+def text_width(n):
+    size = P(n, "TextSize", 14)
+    f = font(P(n, "Font", "FredokaOne"), max(6, int(size * SS)))
+    return f.getbbox(P(n, "Text", "") or " ")[2] / SS + 2
+
+
+def auto_width(n, ph):
+    """Width of an AutomaticSize X element (text, or a horizontal list of children)."""
+    if P(n, "ClassName") in ("TextLabel", "TextButton") and P(n, "Text", ""):
+        return text_width(n)
+    pad = child_of_class(n, "UIPadding")
+    extra = 0
+    if pad:
+        extra = P(pad, "PaddingLeft", {"udim": [0, 0]})["udim"][1] + P(pad, "PaddingRight", {"udim": [0, 0]})["udim"][1]
+    lst = child_of_class(n, "UIListLayout")
+    items = [c for c in n["children"] if P(c, "ClassName") in GUI_CLASSES and P(c, "Visible", True)]
+    if lst and P(lst, "FillDirection") == "Horizontal":
+        gap = P(lst, "Padding", {"udim": [0, 0]})["udim"][1]
+        return sum(resolve_size(c, 0, ph)[0] for c in items) + gap * max(0, len(items) - 1) + extra
+    return max([resolve_size(c, 0, ph)[0] for c in items] or [0]) + extra
+
+
 def resolve_size(n, pw, ph):
     sx, ox, sy, oy = udim2(P(n, "Size"), (0, 100, 0, 100))
     constraint = P(n, "SizeConstraint", "RelativeXY")
     basex = ph if constraint == "RelativeYY" else pw
     basey = pw if constraint == "RelativeXX" else ph
     w, h = sx * basex + ox, sy * basey + oy
+    if P(n, "AutomaticSize") in ("X", "XY"):
+        w = max(w, auto_width(n, h if h > 0 else ph))
     ar = child_of_class(n, "UIAspectRatioConstraint")
     if ar:
         r = P(ar, "AspectRatio", 1)
@@ -424,7 +496,10 @@ def draw_node(canvas, n, x, y, w, h):
         th = P(stroke, "Thickness", 1) * SS
         col = tuple(int(c * 255) for c in P(stroke, "Color", {"c3": [0, 0, 0]})["c3"])
         m = rounded_mask(Wd + 2 * th, Ht + 2 * th, radius + th)
-        canvas.paste(Image.new("RGBA", m.size, col + (255,)), (int(X - th), int(Y - th)), m)
+        m = m.point(lambda a: int(a * (1 - P(stroke, "Transparency", 0))))
+        layer = Image.new("RGBA", canvas.size)
+        layer.paste(Image.new("RGBA", m.size, col + (255,)), (int(X - th), int(Y - th)), m)
+        canvas.alpha_composite(layer)
     if bt < 1:
         base = P(n, "BackgroundColor3", {"c3": [0.64, 0.64, 0.64]})["c3"]
         color, alpha = gradient_image(n, Wd, Ht, base)
@@ -478,15 +553,18 @@ def draw_node(canvas, n, x, y, w, h):
 def draw_text(canvas, n, X, Y, Wd, Ht):
     text = P(n, "Text", "")
     fname = P(n, "Font", "FredokaOne")
-    color = tuple(int(c * 255) for c in P(n, "TextColor3", {"c3": [0, 0, 0]})["c3"])
+    color = tuple(int(c * 255) for c in P(n, "TextColor3", {"c3": [0, 0, 0]})["c3"]) + (int(255 * (1 - P(n, "TextTransparency", 0))),)
     tsc = child_of_class(n, "UITextSizeConstraint")
     max_size = (P(tsc, "MaxTextSize", 100) if tsc else 100) * SS
     stroke = next((c for c in n["children"] if P(c, "ClassName") == "UIStroke"
                    and P(c, "ApplyStrokeMode", "Contextual") == "Contextual"), None)
     sw = int(P(stroke, "Thickness", 0) * SS) if stroke else 0
     scol = tuple(int(c * 255) for c in P(stroke, "Color", {"c3": [0, 0, 0]})["c3"]) if stroke else None
-    size = int(min(max_size, Ht))
+    scaled = P(n, "TextScaled", False)
+    size = int(min(max_size, Ht)) if scaled else int(P(n, "TextSize", 14) * SS)
     wrap = P(n, "TextWrapped", False)
+    if stroke and P(stroke, "Transparency", 0) > 0.5:
+        sw = 0
 
     def wrap_lines(f):
         if not wrap:
@@ -504,7 +582,7 @@ def draw_text(canvas, n, X, Y, Wd, Ht):
             out_lines.append(cur)
         return out_lines
 
-    while size > 6:
+    while scaled and size > 6:
         f = font(fname, size)
         lines = wrap_lines(f)
         widths = [f.getbbox(l)[2] for l in lines]
@@ -516,7 +594,7 @@ def draw_text(canvas, n, X, Y, Wd, Ht):
     d = ImageDraw.Draw(canvas)
     line_h = size * 1.15
     total = line_h * len(lines)
-    ty = Y + (Ht - total) / 2
+    ty = Y if P(n, "TextYAlignment", "Center") == "Top" else Y + (Ht - total) / 2
     align = P(n, "TextXAlignment", "Center")
     for l in lines:
         bbox = f.getbbox(l)

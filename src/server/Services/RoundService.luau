@@ -34,6 +34,8 @@ type Round = {
 	participants: { Player },
 	alive: { [Player]: boolean },
 	team: { [Player]: Side },
+	-- The character each chicken started the round with.
+	characters: { [Player]: Model },
 	connections: { RBXScriptConnection },
 	lastRageLaunch: { [Player]: number },
 	-- Who last egged each chicken, for knockout credit.
@@ -50,9 +52,25 @@ local votes: { [Player]: string } = {}
 local voteOptions: { string } = {}
 
 local teamObjects: { [Side]: Team } = {}
+local lastAfkChange: { [Player]: number } = {}
 
 local function now(): number
 	return workspace:GetServerTimeNow()
+end
+
+-- AFK players sit in the lobby: they don't vote, count towards starting, or join rounds.
+local function isAfk(player: Player): boolean
+	return player:GetAttribute("Afk") == true
+end
+
+local function activePlayers(): { Player }
+	local list = {}
+	for _, player in Players:GetPlayers() do
+		if not isAfk(player) then
+			table.insert(list, player)
+		end
+	end
+	return list
 end
 
 local function setState(state: string, duration: number?, message: string?)
@@ -90,7 +108,7 @@ local function publishVotes()
 end
 
 local function onVote(player: Player, modeId: unknown)
-	if RoundState:GetAttribute("State") ~= "Voting" or type(modeId) ~= "string" then
+	if RoundState:GetAttribute("State") ~= "Voting" or type(modeId) ~= "string" or isAfk(player) then
 		return
 	end
 	if not table.find(voteOptions, modeId) then
@@ -101,7 +119,7 @@ local function onVote(player: Player, modeId: unknown)
 end
 
 local function runVote(): Modes.Mode
-	local playerCount = #Players:GetPlayers()
+	local playerCount = #activePlayers()
 	local eligible = {}
 	for _, mode in Modes.list do
 		if playerCount >= mode.minPlayers then
@@ -132,9 +150,13 @@ local function runVote(): Modes.Mode
 			table.insert(best, id)
 		end
 	end
-	local chosen = Modes.get(best[rng:NextInteger(1, #best)])
+	local chosen = if #best > 0 then Modes.get(best[rng:NextInteger(1, #best)]) else nil
 	RoundState:SetAttribute("VoteOptions", "[]")
-	return chosen or Modes.list[1]
+	-- Someone may have left during the vote; don't start a mode there are too few players for.
+	if not chosen or #activePlayers() < chosen.minPlayers then
+		return Modes.list[1]
+	end
+	return chosen
 end
 
 -- Elimination ---------------------------------------------------------------------------
@@ -151,7 +173,8 @@ local function checkWinner(r: Round): (boolean, { Player }, string?)
 				count += 1
 			end
 		end
-		if count <= 1 and #r.participants >= 2 then
+		-- A lone tester (or everyone dying at once) ends when nobody is left.
+		if count == 0 or (count == 1 and #r.participants >= 2) then
 			local side: Side? = if teamsAlive.A then "A" elseif teamsAlive.B then "B" else nil
 			if side then
 				local winners = {}
@@ -207,7 +230,7 @@ local function eliminate(r: Round, player: Player, reason: string, icon: string)
 		feed(`{player.DisplayName} {reason}`, icon)
 	end
 	survivalReward(r, player)
-	if r.mode.roadRage and player.Parent then
+	if r.mode.roadRage and player.Parent and not isAfk(player) then
 		player:SetAttribute("Driver", true)
 		Remotes.Feed:FireClient(player, "You're a driver now. Run them over!", "angry")
 	end
@@ -230,11 +253,38 @@ local function onLaunchRageCar(player: Player, lane: unknown)
 		return
 	end
 	local t = os.clock()
-	if t - (r.lastRageLaunch[player] or 0) < Config.RoadRage.Cooldown then
+	-- A little slack for network jitter, so a launch the client shows as ready isn't dropped.
+	if t - (r.lastRageLaunch[player] or 0) < Config.RoadRage.Cooldown * 0.9 then
 		return
 	end
 	r.lastRageLaunch[player] = t
 	TrafficService.launchRageCar(player, lane)
+end
+
+-- AFK -----------------------------------------------------------------------------------------
+
+-- Takes effect from the next round: a chicken already in a round keeps playing (going AFK
+-- never kills it). An eliminated Road Rage driver just stops driving.
+local function onSetAfk(player: Player, afk: unknown)
+	if type(afk) ~= "boolean" then
+		return
+	end
+	local t = os.clock()
+	if t - (lastAfkChange[player] or 0) < 0.5 then
+		return
+	end
+	lastAfkChange[player] = t
+	player:SetAttribute("Afk", afk)
+	if afk then
+		if votes[player] then
+			votes[player] = nil
+			publishVotes()
+		end
+		local r = round
+		if r and not r.alive[player] and player:GetAttribute("Driver") == true then
+			player:SetAttribute("Driver", false)
+		end
+	end
 end
 
 -- Crossing ---------------------------------------------------------------------------------
@@ -279,13 +329,40 @@ end
 
 local function playersWithCharacters(): { Player }
 	local list = {}
-	for _, player in Players:GetPlayers() do
+	for _, player in activePlayers() do
 		local humanoid = ChickenService.getHumanoid(player)
 		if humanoid and humanoid.Health > 0 and ChickenService.getRoot(player) then
 			table.insert(list, player)
 		end
 	end
 	return list
+end
+
+-- Stops everything a round started. Also used when a round errors, so it must be safe to call
+-- twice and with no round at all.
+local function stopRound(r: Round?)
+	if r then
+		r.ended = true
+		for _, c in r.connections do
+			c:Disconnect()
+		end
+		table.clear(r.connections)
+	end
+	RoundState:SetAttribute("SuddenDeath", false)
+	RoundState:SetAttribute("CrossTarget", "")
+	RoundState:SetAttribute("CrossDeadline", 0)
+	HazardService.stop()
+	EventService.stop()
+	SidewalkService.reset(arena)
+	TrafficService.stop()
+	EggService.setRules({
+		canShoot = function()
+			return false
+		end,
+		canHit = function()
+			return false
+		end,
+	})
 end
 
 local function runRound(mode: Modes.Mode): ({ Player }, string)
@@ -298,6 +375,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 		participants = playersWithCharacters(),
 		alive = {},
 		team = {},
+		characters = {},
 		connections = {},
 		lastRageLaunch = {},
 		lastEgged = {},
@@ -305,6 +383,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	}
 	round = r
 	RoundState:SetAttribute("ModeId", mode.id)
+	RoundState:SetAttribute("RoundPlayers", #r.participants)
 
 	-- Teams: shuffle then deal players onto the two sides.
 	local shuffled = table.clone(r.participants)
@@ -327,6 +406,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 		local character = player.Character
 		local humanoid = ChickenService.getHumanoid(player)
 		if character and humanoid then
+			r.characters[player] = character
 			character:PivotTo(SidewalkService.spawnCFrame(side, rng))
 			table.insert(
 				r.connections,
@@ -364,8 +444,12 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	})
 
 	-- Traffic starts with the countdown so the road is already busy when the round begins.
+	-- Its start time is rounded down, so measure the event offsets from the moment the round
+	-- actually goes live; otherwise speed-ups would land up to a second before their banners.
 	local trafficStart = math.floor(now())
 	local countdown = Config.Timing.CountdownDuration
+	local liveAt = now() + countdown
+	local liveOffset = liveAt - trafficStart
 	local events = EventService.plan(Config.Timing.RoundTimeLimit)
 	local hazardContext: HazardService.Context = {
 		getChickens = function()
@@ -378,8 +462,8 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	TrafficService.start({
 		rushHour = mode.rushHour,
 		startTime = trafficStart,
-		suddenDeathAt = countdown + Config.Timing.SuddenDeathAt,
-		windows = EventService.trafficWindows(events, countdown),
+		suddenDeathAt = liveOffset + Config.Timing.SuddenDeathAt,
+		windows = EventService.trafficWindows(events, liveOffset),
 		getChickens = function()
 			return aliveList(r)
 		end,
@@ -400,12 +484,12 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	})
 
 	setState("Starting", countdown, `{mode.name}: {mode.description}`)
-	task.wait(countdown)
+	task.wait(math.max(0, liveAt - now()))
 	if #aliveList(r) == 0 then
 		r.ended = true
 	end
 
-	local roundStart = now()
+	local roundStart = liveAt
 	r.startedAt = roundStart
 	setState("InRound", Config.Timing.RoundTimeLimit)
 	task.spawn(runCrossing, r, roundStart)
@@ -421,7 +505,11 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 
 		for _, player in aliveList(r) do
 			local root = ChickenService.getRoot(player)
-			if root and root.Position.Y < Config.Map.KillY then
+			if player.Character ~= r.characters[player] or not root or not ChickenService.getHumanoid(player) then
+				-- The round chicken was replaced or removed without dying (we'd never see its
+				-- Died event), so it can't be hit any more and would stall the round.
+				eliminate(r, player, "flew the coop", "feather")
+			elseif root.Position.Y < Config.Map.KillY then
 				eliminate(r, player, "fell into the clouds", "skull")
 				ChickenService.kill(player)
 			end
@@ -445,25 +533,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 		end
 	end
 
-	r.ended = true
-	RoundState:SetAttribute("SuddenDeath", false)
-	RoundState:SetAttribute("CrossTarget", "")
-	RoundState:SetAttribute("CrossDeadline", 0)
-	HazardService.stop()
-	EventService.stop()
-	SidewalkService.reset(arena)
-	TrafficService.stop()
-	EggService.setRules({
-		canShoot = function()
-			return false
-		end,
-		canHit = function()
-			return false
-		end,
-	})
-	for _, c in r.connections do
-		c:Disconnect()
-	end
+	stopRound(r)
 	return winners, message
 end
 
@@ -484,6 +554,7 @@ local function cleanupRound(r: Round)
 	end
 	round = nil
 	RoundState:SetAttribute("ModeId", "")
+	RoundState:SetAttribute("RoundPlayers", 0)
 end
 
 local function giveRoundRewards(r: Round, winners: { Player })
@@ -506,8 +577,8 @@ local function giveRoundRewards(r: Round, winners: { Player })
 end
 
 local function waitForPlayers()
-	while #Players:GetPlayers() < Config.MinPlayers do
-		setState("Waiting", nil, `Waiting for players ({#Players:GetPlayers()}/{Config.MinPlayers})`)
+	while #activePlayers() < Config.MinPlayers do
+		setState("Waiting", nil, `Waiting for players ({#activePlayers()}/{Config.MinPlayers})`)
 		task.wait(1)
 	end
 end
@@ -529,7 +600,9 @@ function RoundService.init()
 
 	Remotes.Vote.OnServerEvent:Connect(onVote)
 	Remotes.LaunchRageCar.OnServerEvent:Connect(onLaunchRageCar)
+	Remotes.SetAfk.OnServerEvent:Connect(onSetAfk)
 	Players.PlayerRemoving:Connect(function(player)
+		lastAfkChange[player] = nil
 		if votes[player] then
 			votes[player] = nil
 			publishVotes()
@@ -540,19 +613,18 @@ function RoundService.init()
 		while true do
 			waitForPlayers()
 			local mode = runVote()
+			-- Players can leave during the vote; go back to waiting instead of starting a
+			-- round nobody can win.
+			if #activePlayers() < Config.MinPlayers then
+				continue
+			end
 			local ok, winners, message = pcall(runRound, mode)
 			if not ok then
 				warn("Round failed:", winners)
 				winners, message = {}, "Round cancelled"
-				TrafficService.stop()
-				HazardService.stop()
-				EventService.stop()
-				if round then
-					round.ended = true
-					for _, c in round.connections do
-						c:Disconnect()
-					end
-				end
+				xpcall(stopRound, function(err)
+					warn("Round cleanup failed:", err)
+				end, round)
 			end
 			local celebrations = {}
 			for _, player in winners :: { Player } do

@@ -46,7 +46,7 @@ local RAINBOW = {
 local items: { Item } = {
 	-- Chicken skins ------------------------------------------------------------------
 	{ id = "Classic", slot = "ChickenSkin", name = "Classic", rarity = "Common", default = true,
-		look = { colors = { WHITE }, comb = RED, beak = ORANGE } },
+		look = { colors = { Color3.fromRGB(228, 216, 194) }, comb = RED, beak = ORANGE } },
 	{ id = "BrownHen", slot = "ChickenSkin", name = "Brown Hen", rarity = "Common", price = 250,
 		look = { colors = { Color3.fromRGB(150, 95, 55) }, comb = RED, beak = ORANGE } },
 	{ id = "Bantam", slot = "ChickenSkin", name = "Bantam", rarity = "Common", price = 400,

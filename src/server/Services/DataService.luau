@@ -232,8 +232,19 @@ local equippedChanged = Instance.new("BindableEvent")
 -- Signal fired with (player, slot) when a player equips something.
 DataService.EquippedChanged = equippedChanged.Event
 
+-- Shop requests faster than any human clicks are dropped (equipping a skin respawns the chicken).
+local lastRequest: { [Player]: number } = {}
+local function throttled(player: Player): boolean
+	local t = os.clock()
+	if t - (lastRequest[player] or 0) < 0.1 then
+		return true
+	end
+	lastRequest[player] = t
+	return false
+end
+
 local function onBuy(player: Player, itemId: unknown)
-	if type(itemId) ~= "string" then
+	if type(itemId) ~= "string" or throttled(player) then
 		return
 	end
 	local data = DataService.get(player)
@@ -255,7 +266,7 @@ local function onBuy(player: Player, itemId: unknown)
 end
 
 local function onEquip(player: Player, itemId: unknown)
-	if type(itemId) ~= "string" then
+	if type(itemId) ~= "string" or throttled(player) then
 		return
 	end
 	local data = DataService.get(player)
@@ -275,6 +286,10 @@ local function onEquip(player: Player, itemId: unknown)
 			return
 		end
 	else
+		if (data.Equipped :: any)[item.slot] == itemId then
+			-- Already on; don't respawn the chicken for nothing.
+			return
+		end
 		(data.Equipped :: any)[item.slot] = itemId
 	end
 	DataService.sync(player)
@@ -292,6 +307,7 @@ function DataService.init()
 		local profile = profiles[player]
 		profiles[player] = nil
 		vip[player] = nil
+		lastRequest[player] = nil
 		if profile then
 			profile:EndSession()
 		end
