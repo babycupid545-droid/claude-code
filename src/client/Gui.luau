@@ -49,7 +49,9 @@ end
 -- Clones a template from a screen's Templates folder.
 function Gui.template(screen: Instance, name: string): any
 	local folder = screen:WaitForChild("Templates")
-	return folder:WaitForChild(name):Clone()
+	local clone: any = folder:WaitForChild(name):Clone()
+	clone.Visible = true
+	return clone
 end
 
 return Gui

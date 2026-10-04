@@ -702,6 +702,16 @@ function GuiBuilder.build(parent: Instance, only: string?)
 	for _, name in GuiBuilder.Names do
 		if (only == nil or only == name) and not parent:FindFirstChild(name) then
 			builders[name](parent)
+			-- GUI inside a Folder still renders, so templates must start hidden.
+			local screen = parent:FindFirstChild(name)
+			local tpl = screen and screen:FindFirstChild("Templates")
+			if tpl then
+				for _, t in tpl:GetChildren() do
+					if t:IsA("GuiObject") then
+						t.Visible = false
+					end
+				end
+			end
 		end
 	end
 end
