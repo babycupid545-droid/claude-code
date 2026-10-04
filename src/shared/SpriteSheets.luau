@@ -1,12 +1,17 @@
 --!strict
--- Finds a named UI sprite on either sheet: the farm sheet (FarmSprites, assets/ui/FarmSheet.png)
--- or the original icon sheet (UiSprites, assets/ui/UiSheet.png).
+-- Finds a named UI sprite on one of the sheets: the clean icon set (IconSprites,
+-- assets/ui/IconSheet.png), the farm sheet (FarmSprites, assets/ui/FarmSheet.png) or the
+-- original icon sheet (UiSprites, assets/ui/UiSheet.png).
+--
+-- Icons come from IconSheet once it's uploaded; textures like woodTile always come from the
+-- older sheets.
 --
 -- Until FarmSheet is uploaded, farm icons borrow the closest icon from the original sheet, so
 -- the UI never shows blanks (textures like woodTile just stay hidden).
 
 local AssetIds = require(script.Parent.AssetIds)
 local FarmSprites = require(script.Parent.FarmSprites)
+local IconSprites = require(script.Parent.IconSprites)
 local UiSprites = require(script.Parent.UiSprites)
 
 export type Sprite = { offset: Vector2, size: Vector2 }
@@ -36,6 +41,13 @@ local STAND_INS: { [string]: string } = {
 
 -- Returns the image id ("" if that sheet isn't uploaded) and the sprite's rect.
 function SpriteSheets.find(name: string): (string, Sprite?)
+	local icon = IconSprites[name]
+	if icon then
+		local id = AssetIds.get("IconSheet")
+		if id ~= "" then
+			return id, icon
+		end
+	end
 	local farm = FarmSprites[name]
 	if farm then
 		local id = AssetIds.get("FarmSheet")

@@ -617,7 +617,7 @@ local function buildShop(parent: Instance)
 		Parent = header,
 	})
 	Kit.chip("Coins", "eggCoin", "0", V2(160, 40), { AnchorPoint = V2(1, 0.5), Position = UDim2.new(1, -58, 0.5, 0), Parent = header })
-	Kit.button("Close", nil, "close", V2(46, 46), T.Red, { AnchorPoint = V2(1, 0.5), Position = UDim2.fromScale(1, 0.5), Parent = header })
+	Kit.button("Close", nil, "close", V2(46, 46), nil, { AnchorPoint = V2(1, 0.5), Position = UDim2.fromScale(1, 0.5), Parent = header })
 
 	local tabs = new("Frame", {
 		Name = "Tabs",
@@ -749,7 +749,7 @@ local function buildEmotes(parent: Instance)
 		Parent = root,
 	})
 	Kit.text("Title", "EMOTES", 18, { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -60, 0, 24), Parent = inner })
-	Kit.button("Close", nil, "close", V2(30, 30), T.Red, { AnchorPoint = V2(1, 0), Position = UDim2.new(1, -6, 0, 4), Parent = inner })
+	Kit.button("Close", nil, "close", V2(30, 30), nil, { AnchorPoint = V2(1, 0), Position = UDim2.new(1, -6, 0, 4), Parent = inner })
 	local slots = new("Frame", {
 		Name = "Slots",
 		Position = UDim2.fromOffset(8, 40),

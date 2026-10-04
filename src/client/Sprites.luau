@@ -22,7 +22,7 @@ local EMOJI: { [string]: string } = {
 	speaker = "🔊", speakerMute = "🔇", team = "⚔️", info = "ℹ️", chickenRun = "🐔", splat = "🍳",
 	eggCoin = "🥚", bigEgg = "🥚", basket = "🧺", barn = "🛖", windmill = "🌬️", corn = "🌽", horseshoe = "🍀",
 	nest = "🪺", wheat = "🌾", sun = "☀️", eggCrack = "🐣", chick = "🐥", hayBale = "🌾", pitchfork = "🔱",
-	bell = "🔔", cloud = "☁️", footprint = "🐾", rosette = "🏅",
+	bell = "🔔", cloud = "☁️", footprint = "🐾", rosette = "🏅", afk = "💤",
 }
 
 local sheet = AssetIds.get("UiSheet")

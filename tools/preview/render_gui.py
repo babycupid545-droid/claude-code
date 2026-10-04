@@ -21,8 +21,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SPRITES = {}
-# The preview shows both sheets as if uploaded (farm sprites win, like SpriteSheets.find).
-for _png, _index in (("UiSheet.png", "UiSprites.luau"), ("FarmSheet.png", "FarmSprites.luau")):
+# The preview shows every sheet as if uploaded (later sheets win: the clean icon set beats the
+# farm sheet, which beats the original sheet, like SpriteSheets.find).
+for _png, _index in (("UiSheet.png", "UiSprites.luau"), ("FarmSheet.png", "FarmSprites.luau"),
+                     ("IconSheet.png", "IconSprites.luau")):
     _sheet = Image.open(os.path.join(ROOT, "assets/ui", _png)).convert("RGBA")
     for m in re.findall(r"(\w+) = \{ offset = Vector2.new\((\d+), (\d+)\), size = Vector2.new\((\d+), (\d+)\) \}",
                         open(os.path.join(ROOT, "src/shared", _index)).read()):
@@ -31,7 +33,7 @@ W, H = 1280, 720
 SS = 2  # supersample for smoother edges
 
 MODULES = ["src/shared/Config.luau", "src/shared/AssetIds.luau", "src/shared/UiSprites.luau",
-           "src/shared/FarmSprites.luau", "src/shared/SpriteSheets.luau",
+           "src/shared/FarmSprites.luau", "src/shared/IconSprites.luau", "src/shared/SpriteSheets.luau",
            "src/shared/Modes.luau", "src/shared/Cosmetics.luau",
            "src/builders/GuiKit.luau", "src/builders/GuiBuilder.luau"]
 
@@ -264,7 +266,7 @@ def nine_slice(src, center, w, h, scale):
 def run_luau(scenario, luau):
     parts = [open(os.path.join(ROOT, "tools/preview/mock.luau")).read()]
     parts.append('local shared = service("ReplicatedStorage"):FindFirstChild("Shared")')
-    parts.append('for _, n in { "Modes", "Cosmetics", "FarmSprites", "SpriteSheets" } do moduleInst(n, "./src/shared/" .. n .. ".luau").Parent = shared end')
+    parts.append('for _, n in { "Modes", "Cosmetics", "FarmSprites", "IconSprites", "SpriteSheets" } do moduleInst(n, "./src/shared/" .. n .. ".luau").Parent = shared end')
     parts.append('for _, n in { "GuiKit", "GuiBuilder" } do moduleInst(n, "./src/builders/" .. n .. ".luau").Parent = builders end')
     for rel in MODULES:
         src = open(os.path.join(ROOT, rel)).read()

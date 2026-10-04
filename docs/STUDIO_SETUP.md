@@ -105,15 +105,16 @@ around inside an imported model, though (moving the whole model is fine). If som
 the Output window says which piece is missing or looks rotated, and that model falls back to
 its part-built version. Every piece is under 3,000 triangles, so phones are fine.
 
-## 4. Upload the art and sound (6 files)
+## 4. Upload the art and sound (7 files)
 
-The repo contains the UI art as **two images** and every sound effect as **one audio file**,
-so there are only 6 uploads:
+The repo contains the UI art as **three images** and every sound effect as **one audio file**,
+so there are only 7 uploads:
 
 | File | Type | What it is |
 |---|---|---|
 | `assets/ui/UiSheet.png` | Image | all 39 icons + sunburst, glow, egg splat, patterns |
 | `assets/ui/FarmSheet.png` | Image | the barnyard look: wood/hay textures, fence, ribbon, golden egg currency, farm icons |
+| `assets/ui/IconSheet.png` | Image | the clean icon set: every HUD, shop and menu icon in one consistent style |
 | `assets/audio/Sfx.ogg` | Audio | all 40 sound effects back to back |
 | `assets/audio/MusicLobby.ogg` | Audio | chill lobby music loop |
 | `assets/audio/MusicRound.ogg` | Audio | energetic round music loop |
@@ -130,6 +131,7 @@ so there are only 6 uploads:
 local ids = {
 	UiSheet = 1234567890,
 	FarmSheet = 1234567895,
+	IconSheet = 1234567896,
 	Sfx = 1234567891,
 	MusicLobby = 1234567892,
 	MusicRound = 1234567893,
@@ -138,7 +140,8 @@ local ids = {
 ```
 
 Rojo syncs it instantly. Until the ids are filled in, the UI shows emoji instead of the icons
-(farm icons borrow the closest icon from `UiSheet` until `FarmSheet` is in) and the game is
+(farm icons borrow the closest icon from `UiSheet` until `FarmSheet` is in, and the older
+icons stay until `IconSheet` is in) and the game is
 silent, so everything still works while you wait.
 
 ### Sound not playing?
