@@ -12,6 +12,7 @@
 
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local StarterGui = game:GetService("StarterGui")
 
 local CarBuilder = require(script.Parent.CarBuilder)
@@ -85,6 +86,16 @@ return function()
 		print("[Build] Chickens: already exist, skipped (delete one to rebuild it)")
 	end
 	for _, name in GuiBuilder.Names do
+		-- Older-style GUIs get swapped for the current design; the old copy is kept in
+		-- ServerStorage.OldGui in case you had customised it.
+		local existing = StarterGui:FindFirstChild(name)
+		if existing and ((existing:GetAttribute("GuiVersion") or 1) :: number) < GuiBuilder.Version then
+			local old = ServerStorage:FindFirstChild("OldGui") or Instance.new("Folder")
+			old.Name = "OldGui"
+			old.Parent = ServerStorage
+			existing.Parent = old
+			print(`[Build] GUI {name}: replaced with the new design (old one moved to ServerStorage.OldGui)`)
+		end
 		step(`GUI {name}`, StarterGui:FindFirstChild(name) ~= nil, function()
 			GuiBuilder.build(StarterGui, name)
 		end)

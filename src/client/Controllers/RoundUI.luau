@@ -1,7 +1,8 @@
 --!strict
 -- Drives the Hud ScreenGui (built in Studio, see src/builders/GuiBuilder.luau): round status
 -- and timer, voting, the mode intro, 3-2-1-GO, results, kill feed, stamina, spectating,
--- the sudden death banner and full-screen effects (danger edges, egg splat, flashes).
+-- the sudden death banner, the "run to the other side" sign, the event ribbon and
+-- full-screen effects (danger edges, egg splat, flashes).
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -9,6 +10,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local Events = require(Shared.Events)
+local Layout = require(Shared.Layout)
 local Modes = require(Shared.Modes)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
@@ -383,6 +387,109 @@ local function onStateChanged()
 	lastSecond = -1
 end
 
+-- Crossing sign and event ribbon --------------------------------------------------------------
+
+local crossStart = 0
+local lastCrossSecond = -1
+local wasSafe: boolean? = nil
+
+local function onCrossTarget()
+	local cross = ui.cross
+	if not cross then
+		return
+	end
+	local target = RoundState:GetAttribute("CrossTarget")
+	if type(target) ~= "string" or target == "" then
+		Anim.setShown(cross, false)
+		return
+	end
+	crossStart = workspace:GetServerTimeNow()
+	lastCrossSecond = -1
+	wasSafe = nil
+	Sprites.set(cross.Icon, if target == "A" then "barn" else "windmill")
+	if player:GetAttribute("Alive") == true then
+		Anim.pop(cross)
+		Anim.shake(cross, 6, 0.4)
+	end
+end
+
+local function onEvent()
+	local banner = ui.event
+	if not banner then
+		return
+	end
+	local id = RoundState:GetAttribute("Event")
+	local event = if type(id) == "string" and id ~= "" then Events.get(id) else nil
+	if not event then
+		if banner.Visible then
+			Anim.hide(banner)
+		end
+		return
+	end
+	banner.Label.Text = event.name
+	banner.Desc.Text = event.description
+	banner.Band.BackgroundColor3 = event.color
+	banner.Art.ImageColor3 = event.color:Lerp(Color3.new(1, 1, 1), 0.35)
+	Sprites.set(banner.Icon, event.sprite)
+	Anim.pop(banner)
+	Anim.shine(banner.Band)
+	Sfx.play("Whistle", { pitch = 1.1 })
+end
+
+local function renderBanners(s: string, alive: boolean)
+	local cross = ui.cross
+	if cross then
+		local target = RoundState:GetAttribute("CrossTarget")
+		local deadline = RoundState:GetAttribute("CrossDeadline")
+		local active = s == "InRound" and alive and type(target) == "string" and target ~= "" and type(deadline) == "number"
+		Anim.setShown(cross, active)
+		if active then
+			local now = workspace:GetServerTimeNow()
+			local left = math.max(0, (deadline :: number) - now)
+			local total = math.max(1, (deadline :: number) - crossStart)
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local safe = root ~= nil and Layout.zoneOf(root.Position.Z) == target
+			local name = string.upper(Layout.sideName(target :: string))
+			if safe ~= wasSafe then
+				wasSafe = safe
+				cross.Label.Text = if safe then "SAFE! HOLD ON..." else `RUN TO THE {name}!`
+				cross.Label.TextColor3 = if safe then Color3.fromRGB(170, 255, 150) else Color3.new(1, 1, 1)
+				Anim.punch(cross, 0.12)
+				if safe then
+					Sfx.play("Coin", { pitch = 1.4, volume = 0.4 })
+				end
+			end
+			local fill = cross.Track.Fill
+			fill.Size = UDim2.fromScale(math.clamp(left / total, 0, 1), 1)
+			local urgent = left <= Config.Shuttle.Warning and not safe
+			fill.BackgroundColor3 = if urgent then Color3.fromRGB(255, 80, 80) elseif left / total < 0.5 then Color3.fromRGB(255, 205, 64) else Color3.fromRGB(104, 196, 72)
+			local whole = math.ceil(left)
+			cross.TimePill.Time.Text = tostring(whole)
+			if whole ~= lastCrossSecond then
+				lastCrossSecond = whole
+				if urgent and whole > 0 then
+					Anim.punch(cross.TimePill, 0.25)
+					Sfx.play(if whole <= 1 then "TickFinal" else "Tick", { volume = 0.6 })
+				end
+			end
+			cross.TimePill.BackgroundColor3 = if urgent then Color3.fromRGB(255, 80, 80) else Color3.fromRGB(255, 205, 64)
+		end
+	end
+
+	local banner = ui.event
+	if banner and banner.Visible then
+		local endsAt = RoundState:GetAttribute("EventEndsAt")
+		if type(endsAt) == "number" and endsAt > 0 then
+			banner.Time.Text = tostring(math.ceil(math.max(0, endsAt - workspace:GetServerTimeNow())))
+		else
+			banner.Time.Text = ""
+		end
+		if s ~= "InRound" and s ~= "Starting" then
+			Anim.hide(banner)
+		end
+	end
+end
+
 local lastAlive = -1
 local wasAlive = false
 
@@ -431,7 +538,7 @@ local function render()
 	Anim.setShown(ui.stamina, inRound and alive)
 	local fill = ui.stamina.Track.Fill
 	fill.Size = UDim2.fromScale(math.max(0.02, MovementController.getStamina()), 1)
-	fill.BackgroundColor3 = if MovementController.isGliding() then Color3.fromRGB(255, 240, 150) else Color3.new(1, 1, 1)
+	fill.BackgroundColor3 = if MovementController.isGliding() then Color3.fromRGB(190, 240, 255) else Color3.new(1, 1, 1)
 
 	-- Spectate button for the eliminated.
 	local canSpectate = s == "InRound" and not alive and player:GetAttribute("Driver") ~= true
@@ -451,6 +558,8 @@ local function render()
 			end
 		end
 	end
+
+	renderBanners(s, alive)
 
 	-- You just got eliminated.
 	if wasAlive and not alive and (s == "InRound" or s == "Starting") then
@@ -483,6 +592,9 @@ function RoundUI.start()
 		splat = Gui.find(hud, "Splat"),
 		danger = Gui.find(hud, "Danger"),
 		flash = Gui.find(hud, "Flash"),
+		-- Added in GUI v2; older Studio-built HUDs just don't show them.
+		cross = hud:FindFirstChild("CrossBanner"),
+		event = hud:FindFirstChild("EventBanner"),
 	}
 	Anim.autoJuice(hud)
 
@@ -499,6 +611,10 @@ function RoundUI.start()
 		end
 	end)
 	onStateChanged()
+	RoundState:GetAttributeChangedSignal("CrossTarget"):Connect(onCrossTarget)
+	RoundState:GetAttributeChangedSignal("Event"):Connect(onEvent)
+	onCrossTarget()
+	onEvent()
 
 	Remotes.Feed.OnClientEvent:Connect(pushFeed)
 	Remotes.Knockback.OnClientEvent:Connect(showEggSplat)

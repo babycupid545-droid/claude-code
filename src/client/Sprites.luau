@@ -1,6 +1,6 @@
 --!strict
--- Points every ImageLabel with a "Sprite" attribute at the right spot on the UI sprite sheet.
--- Until the sheet is uploaded (AssetIds.UiSheet), icons fall back to emoji so the UI is
+-- Points every ImageLabel with a "Sprite" attribute at the right spot on its sprite sheet
+-- (see SpriteSheets). Until a sheet is uploaded, icons fall back to emoji so the UI is
 -- still readable.
 
 local Players = game:GetService("Players")
@@ -8,7 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local AssetIds = require(Shared.AssetIds)
-local UiSprites = require(Shared.UiSprites)
+local SpriteSheets = require(Shared.SpriteSheets)
 
 local Sprites = {}
 
@@ -20,6 +20,9 @@ local EMOJI: { [string]: string } = {
 	arrowUp = "⬆️", arrowDown = "⬇️", arrowLeft = "⬅️", arrowRight = "➡️", play = "▶️",
 	sparkle = "✨", fire = "🔥", feather = "🪶", boom = "💥", users = "👥", angry = "😡",
 	speaker = "🔊", speakerMute = "🔇", team = "⚔️", info = "ℹ️", chickenRun = "🐔", splat = "🍳",
+	eggCoin = "🥚", bigEgg = "🥚", basket = "🧺", barn = "🛖", windmill = "🌬️", corn = "🌽", horseshoe = "🍀",
+	nest = "🪺", wheat = "🌾", sun = "☀️", eggCrack = "🐣", chick = "🐥", hayBale = "🌾", pitchfork = "🔱",
+	bell = "🔔", cloud = "☁️", footprint = "🐾", rosette = "🏅",
 }
 
 local sheet = AssetIds.get("UiSheet")
@@ -29,10 +32,10 @@ local function apply(image: any)
 	if type(name) ~= "string" then
 		return
 	end
-	local sprite = UiSprites[name]
+	local id, sprite = SpriteSheets.find(name)
 	local fallback = image:FindFirstChild("SpriteEmoji")
-	if sheet ~= "" and sprite then
-		image.Image = sheet
+	if id ~= "" and sprite then
+		image.Image = id
 		image.ImageRectOffset = sprite.offset
 		image.ImageRectSize = sprite.size
 		if fallback then

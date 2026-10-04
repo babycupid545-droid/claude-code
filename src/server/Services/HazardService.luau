@@ -112,7 +112,7 @@ local function spawnGoldenEgg(gen: number, ctx: Context)
 			for _, player in ctx.getChickens() do
 				local root = ChickenService.getRoot(player)
 				if root and (root.Position - egg.Position).Magnitude < 4 then
-					DataService.reward(player, E.EggRainReward, "golden egg!")
+					DataService.reward(player, E.EggRainReward, "from a golden egg!")
 					Remotes.EggPickup:FireAllClients(egg.Position, player.UserId)
 					egg:Destroy()
 					return

@@ -196,7 +196,7 @@ function DataService.reward(player: Player, amount: number, reason: string)
 	end
 	data.Coins += amount
 	DataService.sync(player)
-	Remotes.Notify:FireClient(player, `+{amount} {reason}`, "coin", amount)
+	Remotes.Notify:FireClient(player, `+{amount} eggs {reason}`, "coin", amount)
 end
 
 function DataService.addCoins(player: Player, amount: number)
@@ -245,7 +245,7 @@ local function onBuy(player: Player, itemId: unknown)
 		return
 	end
 	if data.Coins < item.price then
-		Remotes.Notify:FireClient(player, "Not enough coins!", "error", 0)
+		Remotes.Notify:FireClient(player, "Not enough golden eggs!", "error", 0)
 		return
 	end
 	data.Coins -= item.price

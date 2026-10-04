@@ -6,6 +6,8 @@
 local ids = {
 	-- assets/ui/UiSheet.png  (Image)
 	UiSheet = 74198106090898,
+	-- assets/ui/FarmSheet.png  (Image) - barn/wood HUD art and the golden egg currency icon
+	FarmSheet = 0,
 	-- assets/audio/Sfx.ogg  (Audio) - every sound effect in one file
 	Sfx = 91824233357331,
 	-- assets/audio/*.ogg  (Audio) - music loops

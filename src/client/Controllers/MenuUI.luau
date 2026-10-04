@@ -1,5 +1,5 @@
 --!strict
--- The side menu (coins, Shop, Emotes, music), the Shop window, the emote wheel and toast
+-- The side menu (golden eggs, Shop, Emotes, music), the Shop window, the emote wheel and toast
 -- notifications. Uses the Hud, Shop and Emotes ScreenGuis built in Studio.
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -165,7 +165,7 @@ local function itemCard(item: Cosmetics.Item, order: number)
 		end)
 	elseif item.price then
 		local affordable = data ~= nil and data.coins >= item.price
-		setButton(action, tostring(item.price), if affordable then ORANGE else GREY, "coin")
+		setButton(action, tostring(item.price), if affordable then ORANGE else GREY, "eggCoin")
 		action.Activated:Connect(function()
 			if ClientData.get() and (ClientData.get() :: any).coins >= item.price then
 				Remotes.BuyItem:FireServer(item.id)
@@ -244,9 +244,9 @@ local function refreshShop()
 	if currentTab == "Coins" then
 		local data = ClientData.get()
 		local M = Config.Monetization
-		packCard(1, "VIP", `x{M.VipCoinMultiplier} COINS FOREVER`, "crown", M.VipGamePassId, true, data ~= nil and data.vip)
+		packCard(1, "VIP", `x{M.VipCoinMultiplier} EGGS FOREVER`, "crown", M.VipGamePassId, true, data ~= nil and data.vip)
 		for i, pack in M.CoinPacks do
-			packCard(i + 1, `{pack.coins} COINS`, string.upper(pack.name), "coin", pack.productId, false, false)
+			packCard(i + 1, `{pack.coins} EGGS`, string.upper(pack.name), if i == #M.CoinPacks then "barn" elseif i == 1 then "basket" else "nest", pack.productId, false, false)
 		end
 		return
 	end
@@ -306,7 +306,7 @@ end
 
 type ToastLook = { sprite: string, color: Color3, sound: string }
 local TOASTS: { [string]: ToastLook } = {
-	coin = { sprite = "coin", color = YELLOW, sound = "Coin" },
+	coin = { sprite = "eggCoin", color = YELLOW, sound = "Coin" },
 	error = { sprite = "close", color = Color3.fromRGB(255, 110, 110), sound = "Error" },
 	unlock = { sprite = "star", color = Color3.fromRGB(140, 255, 150), sound = "Purchase" },
 	knockout = { sprite = "egg", color = Color3.fromRGB(255, 200, 90), sound = "Knockout" },

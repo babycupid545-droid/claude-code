@@ -20,14 +20,18 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SHEET = Image.open(os.path.join(ROOT, "assets/ui/UiSheet.png")).convert("RGBA")
-SPRITES = {m[0]: (int(m[1]), int(m[2]), int(m[3]), int(m[4])) for m in re.findall(
-    r"(\w+) = \{ offset = Vector2.new\((\d+), (\d+)\), size = Vector2.new\((\d+), (\d+)\) \}",
-    open(os.path.join(ROOT, "src/shared/UiSprites.luau")).read())}
+SPRITES = {}
+# The preview shows both sheets as if uploaded (farm sprites win, like SpriteSheets.find).
+for _png, _index in (("UiSheet.png", "UiSprites.luau"), ("FarmSheet.png", "FarmSprites.luau")):
+    _sheet = Image.open(os.path.join(ROOT, "assets/ui", _png)).convert("RGBA")
+    for m in re.findall(r"(\w+) = \{ offset = Vector2.new\((\d+), (\d+)\), size = Vector2.new\((\d+), (\d+)\) \}",
+                        open(os.path.join(ROOT, "src/shared", _index)).read()):
+        SPRITES[m[0]] = (_sheet, int(m[1]), int(m[2]), int(m[3]), int(m[4]))
 W, H = 1280, 720
 SS = 2  # supersample for smoother edges
 
 MODULES = ["src/shared/Config.luau", "src/shared/AssetIds.luau", "src/shared/UiSprites.luau",
+           "src/shared/FarmSprites.luau", "src/shared/SpriteSheets.luau",
            "src/shared/Modes.luau", "src/shared/Cosmetics.luau",
            "src/builders/GuiKit.luau", "src/builders/GuiBuilder.luau"]
 
@@ -102,7 +106,14 @@ elseif scenario == "round" then
 	feed("Nugget got flattened by a car", "car", 3)
 	feed("Henrietta egged Drumstick to their doom!", "egg", 2)
 	feed("Sidewalk A is collapsing! Cross the road!", "lightning", 1)
-	toast("+15 knockout", "coin", Color3.fromRGB(255, 201, 60), 1)
+	toast("+15 eggs knockout", "eggCoin", Color3.fromRGB(255, 201, 60), 1)
+	hud.CrossBanner.Visible = true
+	hud.CrossBanner.Label.Text = "RUN TO THE WINDMILL!"
+	hud.CrossBanner.TimePill.Time.Text = "7"
+	hud.CrossBanner.Track.Fill.Size = UDim2.fromScale(0.45, 1)
+	hud.CrossBanner.Track.Fill.BackgroundColor3 = Color3.fromRGB(255, 205, 64)
+	hud.EventBanner.Visible = true
+	hud.EventBanner.Time.Text = "18"
 	toast("KNOCKOUT! Drumstick", "egg", Color3.fromRGB(255, 200, 90), 2)
 	hud.Countdown.Visible = true
 	hud.Countdown.Number.Text = "GO!"
@@ -117,7 +128,7 @@ elseif scenario == "results" then
 	hud.Results.Winner.Text = "Henrietta crossed the road!"
 	hud.Results.Reward.Visible = true
 	hud.Results.Reward.Row.Label.Text = "+85"
-	toast("+50 for winning!", "coin", Color3.fromRGB(255, 201, 60), 1)
+	toast("+50 eggs for winning!", "eggCoin", Color3.fromRGB(255, 201, 60), 1)
 elseif scenario == "shop" then
 	shop.Dim.Visible = true
 	shop.Panel.Visible = true
@@ -180,10 +191,32 @@ def font(name, size):
     return FONTS[key]
 
 
+def nine_slice(src, center, w, h, scale):
+    """Roblox-style 9-slice: corners keep their size (times `scale`), edges/centre stretch."""
+    x0, y0, x1, y1 = center
+    sw, sh = src.size
+    cols = [(0, x0), (x0, x1), (x1, sw)]
+    rows = [(0, y0), (y0, y1), (y1, sh)]
+    cw = [max(1, int(x0 * scale)), 0, max(1, int((sw - x1) * scale))]
+    rh = [max(1, int(y0 * scale)), 0, max(1, int((sh - y1) * scale))]
+    cw[1] = max(1, w - cw[0] - cw[2])
+    rh[1] = max(1, h - rh[0] - rh[2])
+    out = Image.new("RGBA", (max(1, w), max(1, h)))
+    oy = 0
+    for (ry0, ry1), th in zip(rows, rh):
+        ox = 0
+        for (cx0, cx1), tw in zip(cols, cw):
+            if cx1 > cx0 and ry1 > ry0:
+                out.alpha_composite(src.crop((cx0, ry0, cx1, ry1)).resize((tw, th), Image.LANCZOS), (ox, oy))
+            ox += tw
+        oy += th
+    return out
+
+
 def run_luau(scenario, luau):
     parts = [open(os.path.join(ROOT, "tools/preview/mock.luau")).read()]
     parts.append('local shared = service("ReplicatedStorage"):FindFirstChild("Shared")')
-    parts.append('for _, n in { "Modes", "Cosmetics" } do moduleInst(n, "./src/shared/" .. n .. ".luau").Parent = shared end')
+    parts.append('for _, n in { "Modes", "Cosmetics", "FarmSprites", "SpriteSheets" } do moduleInst(n, "./src/shared/" .. n .. ".luau").Parent = shared end')
     parts.append('for _, n in { "GuiKit", "GuiBuilder" } do moduleInst(n, "./src/builders/" .. n .. ".luau").Parent = builders end')
     for rel in MODULES:
         src = open(os.path.join(ROOT, rel)).read()
@@ -404,14 +437,18 @@ def draw_node(canvas, n, x, y, w, h):
     if cls in ("ImageLabel", "ImageButton"):
         sprite = n["attrs"].get("Sprite")
         if sprite in SPRITES and P(n, "ImageTransparency", 0) < 1:
-            ox, oy, sw, sh = SPRITES[sprite]
-            src = SHEET.crop((int(ox), int(oy), int(ox + sw), int(oy + sh)))
+            sheet, ox, oy, sw, sh = SPRITES[sprite]
+            src = sheet.crop((int(ox), int(oy), int(ox + sw), int(oy + sh)))
             tint = P(n, "ImageColor3", {"c3": [1, 1, 1]})["c3"]
             arr = np.array(src).astype(float)
             arr[..., :3] *= np.array(tint)
             arr[..., 3] *= 1 - P(n, "ImageTransparency", 0)
             src = Image.fromarray(arr.clip(0, 255).astype(np.uint8), "RGBA")
-            if P(n, "ScaleType") == "Tile":
+            if P(n, "ScaleType") == "Slice" and P(n, "SliceCenter"):
+                x0, y0, x1, y1 = (int(v) for v in P(n, "SliceCenter")["rect"])
+                layer = nine_slice(src, (x0, y0, x1, y1), int(Wd), int(Ht), SS * 0.5)
+                canvas.alpha_composite(layer, (int(X), int(Y)))
+            elif P(n, "ScaleType") == "Tile":
                 tile = P(n, "TileSize", {"udim2": [0, 32, 0, 32]})["udim2"]
                 tw, th = max(4, int(tile[1] * SS)), max(4, int(tile[3] * SS))
                 t = src.resize((tw, th), Image.LANCZOS)

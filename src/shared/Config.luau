@@ -153,9 +153,9 @@ Config.Monetization = {
 	VipGamePassId = 0,
 	VipCoinMultiplier = 2,
 	CoinPacks = {
-		{ productId = 0, coins = 500, name = "Handful of Coins" },
-		{ productId = 0, coins = 1500, name = "Bucket of Coins" },
-		{ productId = 0, coins = 5000, name = "Barn of Coins" },
+		{ productId = 0, coins = 500, name = "Basket of Eggs" },
+		{ productId = 0, coins = 1500, name = "Nest of Eggs" },
+		{ productId = 0, coins = 5000, name = "Barn Full of Eggs" },
 	},
 	-- Robux-only cosmetics: item id -> developer product id.
 	ItemProducts = {

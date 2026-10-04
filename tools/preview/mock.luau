@@ -494,6 +494,10 @@ function Inst:Clone()
 	return copy
 end
 
+local Rect = { new = function(a, b, c, d)
+	return { kind = "Rect", Min = Vector2.new(a, b), Max = Vector2.new(c, d) }
+end }
+
 -- JSON dump of an instance tree.
 local function jsonValue(v)
 	local t = type(v)
@@ -513,6 +517,8 @@ local function jsonValue(v)
 			return string.format('{"udim2":[%.5g,%.5g,%.5g,%.5g]}', v.X.Scale, v.X.Offset, v.Y.Scale, v.Y.Offset)
 		elseif v.kind == "UDim" then
 			return string.format('{"udim":[%.5g,%.5g]}', v.Scale, v.Offset)
+		elseif v.kind == "Rect" then
+			return string.format('{"rect":[%.5g,%.5g,%.5g,%.5g]}', v.Min.X, v.Min.Y, v.Max.X, v.Max.Y)
 		elseif v.kind == "Vector2" then
 			return string.format('{"v2":[%.5g,%.5g]}', v.X, v.Y)
 		elseif v.kind == "ColorSequence" then
