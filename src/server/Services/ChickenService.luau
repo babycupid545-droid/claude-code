@@ -143,12 +143,47 @@ local function setupCharacter(player: Player, character: Model)
 	humanoid.WalkSpeed = Config.Chicken.WalkSpeed
 
 	humanoid.Died:Connect(function()
+		-- The chicken falls apart; let the pieces land and bounce instead of dropping through.
+		for _, d in character:GetDescendants() do
+			if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and d.Transparency < 1 then
+				d.CanCollide = true
+			end
+		end
 		task.delay(Config.Timing.RespawnTime, function()
 			if player.Parent == Players and player.Character == character then
 				ChickenService.spawn(player)
 			end
 		end)
 	end)
+end
+
+-- Builds a chicken rig at runtime if it wasn't built in Studio (see docs/STUDIO_SETUP.md).
+function ChickenService.buildMissingRig(skin: Cosmetics.Item): Instance?
+	local ok, result = pcall(function()
+		local assets = ReplicatedStorage:FindFirstChild("Assets")
+		if not assets then
+			local f = Instance.new("Folder")
+			f.Name = "Assets"
+			f.Parent = ReplicatedStorage
+			assets = f
+		end
+		local folder = (assets :: Instance):FindFirstChild("Chickens")
+		if not folder then
+			local f = Instance.new("Folder")
+			f.Name = "Chickens"
+			f.Parent = assets
+			folder = f
+		end
+		local builder = require(ReplicatedStorage:WaitForChild("Builders"):WaitForChild("ChickenBuilder")) :: any
+		local model = builder.build(skin)
+		model.Parent = folder
+		return model
+	end)
+	if not ok then
+		warn("Couldn't build chicken rig:", result)
+		return nil
+	end
+	return result
 end
 
 -- (Re)spawns a player in the lobby with their equipped skin.
@@ -158,7 +193,7 @@ function ChickenService.spawn(player: Player)
 	end
 	spawning[player] = true
 	local skin = Cosmetics.resolve("ChickenSkin", DataService.equipped(player, "ChickenSkin"))
-	local rig = Assets.find("Chickens", skin.id)
+	local rig = Assets.find("Chickens", skin.id) or ChickenService.buildMissingRig(skin)
 
 	local ok, err = pcall(function()
 		if rig and rig:IsA("Model") and rig:FindFirstChildOfClass("Humanoid") and rig:FindFirstChild("HumanoidRootPart") then

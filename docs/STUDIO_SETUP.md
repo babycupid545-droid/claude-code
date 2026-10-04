@@ -31,6 +31,7 @@ The Output window prints what it built. You now have:
 | `Workspace > Arena` | the floating-island road, sidewalk tiles, tunnels, farm islands, clouds |
 | `Workspace > Lobby` | the chicken-coop lobby with the spawn nest, golden egg statue, how-to-play board |
 | `ReplicatedStorage > Assets > Cars` | 10 low-poly vehicles (+ the Road Rage car) |
+| `ReplicatedStorage > Assets > Chickens` | the cartoon chicken character, one per skin (players spawn as these) |
 | `Lighting` | sky haze, bloom, colour grading, sun rays, clouds |
 | `StarterGui > Hud, Shop, Emotes, Driver` | every screen of the UI |
 
@@ -47,6 +48,10 @@ and everyone spawns in the lobby). **Ctrl+Z** undoes the whole build.
 - **Keep the names** of GUI elements and of these gameplay pieces, because scripts look them up:
   `Arena > Road`, `Arena > Sidewalks` (tiles keep their `Side`/`Row` attributes),
   `Arena > Walls`, `Lobby > LobbySpawn`, and everything inside the ScreenGuis.
+- **Chickens:** recolour or reshape freely, add hats or accessories (weld them to `Head` or
+  `Body`). Keep `HumanoidRootPart`, the `Humanoid`, and the joints (`Root`, `Neck`, `LeftWing`,
+  `RightWing`, `LeftHip`, `RightHip`, `Tail`) since the animation drives those. `LidL`/`LidR`
+  are the blinking eyelids.
 - **To rebuild something from scratch**, delete it and run the command again. It only builds
   what's missing, so the rest of your edits are kept.
 - If you forget to build, the game still runs: it builds a temporary copy at runtime and warns
@@ -105,5 +110,6 @@ get in Studio. Studio lighting (shadows, haze, bloom) makes it look better than 
 |---|---|
 | ![Arena](previews/world-arena.jpg) | ![View from the lobby](previews/world-lobby-view.jpg) |
 | ![Lobby](previews/world-lobby.jpg) | ![Cars](previews/world-cars.jpg) |
+| ![Chicken](previews/chicken-classic.jpg) | ![All skins](previews/chickens-all.jpg) |
 | ![In round](previews/ui-round.jpg) | ![Results](previews/ui-results.jpg) |
 | ![Shop](previews/ui-shop.jpg) | ![Emotes](previews/ui-emotes.jpg) |

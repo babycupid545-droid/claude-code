@@ -6,7 +6,8 @@
 --   local b=game.ReplicatedStorage.Builders:Clone() b.Parent=game.ServerStorage local ok,e=pcall(require(b.BuildAll)) b:Destroy() print(ok and "Built!" or e)
 --
 -- It only builds what's missing, so your edits are safe. To rebuild something, delete it
--- first (e.g. Workspace.Arena, StarterGui.Hud, ReplicatedStorage.Assets.Cars) and run it again.
+-- first (e.g. Workspace.Arena, StarterGui.Hud, ReplicatedStorage.Assets.Cars or one chicken in
+-- ReplicatedStorage.Assets.Chickens) and run it again.
 -- Ctrl+Z undoes a whole build.
 
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
@@ -14,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 
 local CarBuilder = require(script.Parent.CarBuilder)
+local ChickenBuilder = require(script.Parent.ChickenBuilder)
 local GuiBuilder = require(script.Parent.GuiBuilder)
 local LightingBuilder = require(script.Parent.LightingBuilder)
 local WorldBuilder = require(script.Parent.WorldBuilder)
@@ -75,6 +77,15 @@ return function()
 	step("Cars", #cars:GetChildren() > 0, function()
 		CarBuilder.build(cars)
 	end)
+	-- One chicken per skin; builds any that are missing.
+	local chickens = assetsFolder("Chickens")
+	local before = #chickens:GetChildren()
+	ChickenBuilder.buildAll(chickens)
+	if #chickens:GetChildren() > before then
+		table.insert(built, "Chickens")
+	else
+		print("[Build] Chickens: already exist, skipped (delete one to rebuild it)")
+	end
 	for _, name in GuiBuilder.Names do
 		step(`GUI {name}`, StarterGui:FindFirstChild(name) ~= nil, function()
 			GuiBuilder.build(StarterGui, name)

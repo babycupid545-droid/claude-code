@@ -59,7 +59,7 @@ emotes are text bubbles, spins and hops.
 | Asset | Size (studs) | Rules |
 |---|---|---|
 | Car | 8 wide × 6 tall × 14 long | Model **pivot at the center** of the car, **front facing -Z** (the pivot's LookVector). Anchoring/collision are handled by the game. Bright colours read best at speed. |
-| Chicken rig | about 4 tall | A full character Model: `Humanoid`, `HumanoidRootPart`, and an `Animate` LocalScript (copy one from a default character in Play mode). R15 recommended. Keep it under ~4.5 studs tall so jumping over cars still works. |
+| Chicken rig | about 5.5 tall | Built by `src/builders/ChickenBuilder.luau`. A replacement needs `Humanoid` (HipHeight = root bottom above the feet), `HumanoidRootPart`, the attribute `ChickenRig = true`, and Motor6Ds named `Root`, `Neck`, `LeftWing`, `RightWing`, `LeftHip`, `RightHip`, `Tail` (the client animates these; no Animate script). Front faces -Z. |
 | Egg | about 1 × 1 × 1.35 | Long axis along Z. |
 | Hit / win effect | — | A ParticleEmitter, or a Folder/Attachment holding several. Emitters with `Enabled = false` are burst once (`EmitCount` attribute, default 30); enabled ones run for the `Duration` attribute (default 3s). |
 | Emote / Glide animation | — | R15, must be owned by the game's owner (or group) to play. Emotes play once; Glide loops. |
