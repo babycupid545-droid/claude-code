@@ -9,7 +9,7 @@ local AssetIds = require(ReplicatedStorage.Shared.AssetIds)
 
 local AudioCheck = {}
 
-local NAMES = { "Sfx", "MusicLobby", "MusicRound", "MusicSuddenDeath", "UiSheet" }
+local NAMES = { "Sfx", "MusicLobby", "MusicRound", "MusicSuddenDeath", "UiSheet", "FarmSheet" }
 
 function AudioCheck.run()
 	task.spawn(function()
@@ -21,7 +21,7 @@ function AudioCheck.run()
 				warn(`[Assets] {name}: no id set in src/shared/AssetIds.luau`)
 			else
 				local probe: Instance
-				if name == "UiSheet" then
+				if name == "UiSheet" or name == "FarmSheet" then
 					local image = Instance.new("ImageLabel")
 					image.Image = id
 					probe = image

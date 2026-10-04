@@ -6,8 +6,25 @@ a UI sprite sheet (`assets/ui/UiSheet.png`), 40 sound effects and 3 music loops 
 This brief is for **replacing or adding** art. Drop objects into these folders in Roblox Studio;
 names must match exactly. Nothing here needs code changes.
 
-Regenerate the sheet/sounds with `python3 tools/art/make_ui_sheet.py` and
-`python3 tools/audio/make_audio.py` after editing those scripts.
+Regenerate the sheets/sounds with `python3 tools/art/make_ui_sheet.py`,
+`python3 tools/art/make_farm_sheet.py` and `python3 tools/audio/make_audio.py` after editing
+those scripts.
+
+## 3D models (Blender)
+
+The chicken, vehicles and props are Python scripts in `tools/blender` that drive Blender
+(`pip install bpy` gives you Blender as a Python module; no Blender install needed):
+
+```
+cd tools/blender
+python3 chicken.py out.png     # preview renders of one set (also vehicles.py, props.py)
+python3 export_all.py          # writes assets/models/*.glb and src/builders/MeshManifest.luau
+```
+
+Every mesh is one colour region named `<Asset>__<Region>` (e.g. `Sedan__Body`,
+`Barn__Roof`); the builders colour regions per skin or variant, so keep that naming if you
+model new ones in Blender by hand. Give a new asset an entry by re-running `export_all.py`
+so the manifest knows its pieces, then import the .glb (see `docs/STUDIO_SETUP.md`, step 3).
 
 > Tip for an AI chat helping with art: Claude can't upload meshes, but it **can** write a Luau
 > script for the Studio **command bar** (View → Command Bar) that builds a model out of Parts

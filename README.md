@@ -18,20 +18,21 @@ The code lives in this repo and is synced into Studio with [Rojo](https://rojo.s
 3. Run `rojo serve` in this folder.
 4. In Studio, open a new **Baseplate**, open the Rojo plugin, and click **Connect**.
 5. Run the build command from [`docs/STUDIO_SETUP.md`](docs/STUDIO_SETUP.md) in the command bar,
-   and upload the 5 asset files it lists. Then press **Play**. In Studio you can test alone; live servers need 2 players.
+   import the 3 Blender models and upload the 6 asset files it lists. Then press **Play**. In Studio you can test alone; live servers need 2 players.
    To test multiplayer modes (Teams, Road Rage) use **Test → Clients and Servers** with 2+ players.
 6. Save the place, then publish it. In **Game Settings → Places**, set **Max Players to 16**.
 
 ## Saving data and Robux
 
-- Player data (coins, cosmetics, stats) saves with ProfileStore (`src/server/Packages`).
+- Player data (golden eggs, cosmetics, stats) saves with ProfileStore (`src/server/Packages`).
+  Golden eggs are the currency; in code they're still called `Coins`.
   To save in Studio, turn on **Game Settings → Security → Enable Studio Access to API
   Services**; otherwise Studio uses temporary data that resets each test.
 - To sell things for Robux, create them in the Creator Dashboard under **Monetization**, then
   paste the ids into `Config.Monetization` in `src/shared/Config.luau`:
-  - 3 **Developer Products** for the coin packs (500 / 1500 / 5000 coins),
+  - 3 **Developer Products** for the egg packs (500 / 1500 / 5000 golden eggs),
   - 5 **Developer Products** for the Robux-only items (Rainbow, DiamondEgg, LoveTap, Supernova, Flex),
-  - 1 **Game Pass** for VIP (double coins).
+  - 1 **Game Pass** for VIP (double golden eggs).
   Anything left at `0` shows as "Coming soon" in the shop.
 
 ## Controls
@@ -48,12 +49,14 @@ The code lives in this repo and is synced into Studio with [Rojo](https://rojo.s
 ```
 src/shared/    Config (all tuning numbers), TrafficSchedule (deterministic cars), Modes, Cosmetics,
                AssetIds (paste uploaded ids here), generated UiSprites / SoundSprites indexes
-src/builders/  Studio builders: world, lobby, cars, lighting, GUI (run once from the command bar)
+src/builders/  Studio builders: world, lobby, cars, chickens, lighting, GUI (run from the command bar);
+               Meshes + MeshManifest place the imported Blender models
 src/server/    Services: RoundService (game loop), TrafficService, EggService, DataService, ...
 src/client/    Controllers (HUD, shop, traffic, movement, eggs, music, world animation) + Anim,
                Sfx, Sprites, CameraFx helpers
-assets/        UiSheet.png, Sfx.ogg and music to upload
-tools/         art/audio generators, and preview renderers for the world and GUI
+assets/        UiSheet.png, FarmSheet.png, Sfx.ogg and music to upload; models/*.glb to import
+tools/         blender/ (models: `pip install bpy`, then `python3 export_all.py`), art/audio
+               generators, and preview renderers for the world and GUI
 tests/         Plain-Luau tests for code that doesn't need Roblox
 ```
 
