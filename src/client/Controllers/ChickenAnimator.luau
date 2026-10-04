@@ -1,13 +1,15 @@
 --!strict
 -- Animates every chicken in code, on every client, from how it's moving:
---   * walk: the classic chicken head-lock (the head holds still, then snaps forward), a
---     bouncy waddle with squash on each step, knees lifting, tail swishing, dust puffs
---   * jump: a crouch, a big wing flap and tucked legs; landing squashes and kicks up dust
---   * glide: wings spread wide with fluttering tips, body pitched forward, legs trailing,
---     tail fanned, and wind trails off the wing tips
---   * shoot: a squat, the tail flicks up as the egg pops out, wings flare and the head
---     glances back
+--   * walk: a steady trot with alternating legs and knee lifts, a light bob and waddle, the
+--     classic chicken head-lock (the head holds still, then snaps forward), dust puffs
+--   * jump: a dip on take-off, a few strong flaps and tucked legs; landing squashes and kicks
+--     up dust
+--   * glide: wings spread wide with a gentle beat, body tipped forward, legs trailing, and
+--     wind trails off the wing tips
+--   * shoot: a quick tip forward, the tail flicks up as the egg pops out, wings flare and the
+--     head glances back
 --   * idle: breathing, looking around, pecking, the odd wing ruffle; eyes blink
+-- Every joint eases toward its pose through a spring, so moves blend instead of snapping.
 -- Joint motion (Motor6D.Transform) is local to each client, so every client runs this for
 -- all chickens. No animation uploads needed.
 
@@ -45,6 +47,9 @@ type Rig = {
 	lastFallSpeed: number,
 	lastStep: number,
 	flapPhase: number,
+	takeoffStart: number,
+	pose: { [string]: number },
+	velocity: { [string]: number },
 }
 
 local rigs: { [Model]: Rig } = {}
@@ -174,6 +179,9 @@ local function register(model: Model)
 		lastFallSpeed = 0,
 		lastStep = 0,
 		flapPhase = 0,
+		takeoffStart = -10,
+		pose = {},
+		velocity = {},
 	}
 	model.Destroying:Connect(function()
 		rigs[model] = nil
@@ -203,7 +211,32 @@ local function pulse(t: number, start: number, length: number): number
 	return math.cos((x - 0.2) / 0.8 * math.pi / 2) ^ 2
 end
 
+-- Every joint channel eases toward its target through a critically damped spring, so state
+-- changes (take-off, landing, starting to glide, shooting) blend instead of snapping.
+local CHANNELS = {
+	"bodyY", "bodyPitch", "bodyRoll", "bodyYaw",
+	"legL", "legR", "liftL", "liftR",
+	"neckZ", "neckY", "neckPitch", "neckYaw", "neckRoll",
+	"wingL", "wingR", "wingSweep",
+	"tailPitch", "tailYaw",
+}
+local SPRING = 26 -- rad/s; higher = snappier
+
+local function spring(rig: Rig, name: string, target: number, dt: number): number
+	local x = rig.pose[name] or target
+	local v = rig.velocity[name] or 0
+	-- Semi-implicit critically damped spring.
+	local w = SPRING
+	local a = w * w * (target - x) - 2 * w * v
+	v += a * dt
+	x += v * dt
+	rig.pose[name] = x
+	rig.velocity[name] = v
+	return x
+end
+
 local function animate(rig: Rig, dt: number, t: number)
+	dt = math.min(dt, 1 / 20)
 	local v = rig.root.AssemblyLinearVelocity
 	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
 	local state = rig.humanoid:GetState()
@@ -212,7 +245,10 @@ local function animate(rig: Rig, dt: number, t: number)
 		or math.abs(v.Y) > 6
 	local gliding = airborne and v.Y < 0 and v.Y > -(Config.Chicken.GlideFallSpeed + 3)
 
-	-- Landing: squash proportional to how hard we came down, plus a dust ring.
+	-- Take-off and landing moments.
+	if airborne and not rig.wasAirborne then
+		rig.takeoffStart = t
+	end
 	if rig.wasAirborne and not airborne then
 		rig.landStart = t
 		rig.landPower = math.clamp(rig.lastFallSpeed / 60, 0.25, 1)
@@ -223,14 +259,15 @@ local function animate(rig: Rig, dt: number, t: number)
 	end
 	rig.wasAirborne = airborne
 
-	rig.walk = approach(rig.walk, if airborne then 0 else math.clamp(speed / Config.Chicken.WalkSpeed, 0, 1.3), 10, dt)
-	rig.air = approach(rig.air, if airborne then 1 else 0, 12, dt)
-	rig.glide = approach(rig.glide, if gliding then 1 else 0, 8, dt)
+	rig.walk = approach(rig.walk, if airborne then 0 else math.clamp(speed / Config.Chicken.WalkSpeed, 0, 1.2), 8, dt)
+	rig.air = approach(rig.air, if airborne then 1 else 0, 10, dt)
+	rig.glide = approach(rig.glide, if gliding then 1 else 0, 6, dt)
 	local lastPhase = rig.phase
 	if rig.walk > 0.05 then
-		rig.phase += dt * (7 + speed * 0.45)
+		-- Stride rate grows with speed, but stays a steady trot.
+		rig.phase += dt * (6.5 + speed * 0.32)
 	end
-	local walk, air, glide, phase = rig.walk, rig.air, rig.glide, rig.phase
+	local walk, air, glide, phase = math.min(rig.walk, 1), rig.air, rig.glide, rig.phase
 	local s = math.sin(phase)
 	local idle = math.max(0, 1 - walk) * (1 - air)
 	local flapAir = air * (1 - glide)
@@ -239,78 +276,95 @@ local function animate(rig: Rig, dt: number, t: number)
 	if walk > 0.6 and math.floor(lastPhase / math.pi) ~= math.floor(phase / math.pi) and t - rig.lastStep > 0.12 then
 		rig.lastStep = t
 		local side = if math.floor(phase / math.pi) % 2 == 0 then -1 else 1
-		local foot = rig.root.CFrame * CFrame.new(side * 0.6, -(rig.humanoid.HipHeight + 1), 0)
+		local foot = rig.root.CFrame * CFrame.new(side * 0.55, -(rig.humanoid.HipHeight + 1), 0)
 		puff(foot.Position, 2)
 	end
 
-	local shoot = pulse(t, rig.shootStart, 0.4)
-	local land = pulse(t, rig.landStart, 0.28) * rig.landPower
-	local ruffle = pulse(t, rig.ruffleStart, 0.7)
+	local shoot = pulse(t, rig.shootStart, 0.35)
+	local land = pulse(t, rig.landStart, 0.3) * rig.landPower
+	local takeoff = pulse(t, rig.takeoffStart, 0.3)
+	local ruffle = pulse(t, rig.ruffleStart, 0.6)
 
-	-- Body: bounce with a squash at each footfall, waddle roll, lean into the run, pitch
-	-- forward to glide, squat to shoot, and breathe when idle.
-	local stepBounce = math.abs(s)
-	local bodyY = stepBounce * 0.28 * walk
-		- (1 - stepBounce) * 0.06 * walk
-		+ math.sin(t * 2.2 + rig.seed) * 0.04 * idle
-		- 0.35 * land
-		- 0.22 * shoot
-	local pitch = -0.14 * math.min(walk, 1) + 0.12 * flapAir - 0.35 * glide - 0.2 * shoot - 0.15 * land
-	setT(rig, "Root", CFrame.new(0, bodyY, 0) * CFrame.Angles(pitch, math.sin(phase) * 0.05 * walk, s * 0.15 * walk))
-
-	-- Legs: step with a knee-lift (lifted leg rides up), tuck when jumping, trail back when
-	-- gliding, brace when landing.
-	local lift = 0.18 * walk
-	local tuckAngle = -0.7 * flapAir - 0.9 * glide
-	setT(rig, "LeftHip", CFrame.new(0, math.max(0, s) * lift, 0) * CFrame.Angles(s * 0.65 * walk + tuckAngle - 0.3 * land, 0, 0.12 * land))
-	setT(rig, "RightHip", CFrame.new(0, math.max(0, -s) * lift, 0) * CFrame.Angles(-s * 0.65 * walk + tuckAngle - 0.3 * land, 0, -0.12 * land))
-
-	-- Head: the chicken head-lock. Over each step the head drifts back relative to the body
-	-- (holding still in the world), then snaps forward.
-	local stepT = (phase * 2 / (2 * math.pi)) % 1
-	local lock = if stepT < 0.75 then stepT / 0.75 else 1 - (stepT - 0.75) / 0.25
-	local headZ = (lock - 0.5) * 0.5 * math.min(walk, 1)
-	local peck = 0
-	if idle > 0.5 and t > rig.nextPeck then
+	-- Idle pecks and look-arounds.
+	if idle > 0.6 and t > rig.nextPeck then
 		rig.peckStart = t
 		rig.nextPeck = t + 3 + math.random() * 5
 	end
-	local pt = t - rig.peckStart
-	if pt < 0.45 then
-		peck = math.sin(pt / 0.45 * math.pi)
-	end
-	local look = math.noise(rig.seed, t * 0.35) * 0.9 * idle
-	setT(
-		rig,
-		"Neck",
-		CFrame.new(0, -0.15 * peck - 0.1 * land, headZ - 0.25 * peck + 0.15 * glide)
-			* CFrame.Angles(-0.7 * peck + 0.1 * flapAir + 0.3 * glide - 0.2 * shoot, look + 0.6 * shoot, 0.1 * shoot)
-	)
+	local peck = pulse(t, rig.peckStart, 0.5) * idle
+	local look = math.noise(rig.seed, t * 0.3) * 0.8 * idle
 
-	-- Wings: strong flaps going up, wide spread with fluttering tips when gliding, flare when
-	-- shooting, a small swing walking, and the odd idle ruffle.
-	rig.flapPhase += dt * (if glide > 0.5 then 34 else 22) * math.max(air, 0.2)
-	local flap = flapAir * (0.75 + math.sin(rig.flapPhase) * 0.75)
-	local spread = glide * (1.25 + math.sin(rig.flapPhase * 1.4) * 0.12)
+	-- Body ------------------------------------------------------------------------------------
+	local step = math.abs(s)
+	local bodyY = step * 0.16 * walk -- bob up on each stride
+		+ math.sin(t * 2 + rig.seed) * 0.03 * idle -- breathing
+		- 0.28 * land - 0.18 * shoot - 0.2 * takeoff * (1 - glide)
+	local bodyPitch = -0.1 * walk -- lean into the walk
+		+ 0.08 * flapAir
+		- 0.3 * glide -- tip forward to glide
+		- 0.22 * shoot -- tip forward as the egg pops out
+		- 0.12 * land
+	local bodyRoll = s * 0.08 * walk -- waddle
+	local bodyYaw = math.sin(phase) * 0.04 * walk
+
+	-- Legs: alternate with a knee lift on the swing; tuck on take-off, trail back gliding.
+	local tuck = -0.65 * flapAir - 0.85 * glide
+	local legL = s * 0.55 * walk + tuck - 0.25 * land
+	local legR = -s * 0.55 * walk + tuck - 0.25 * land
+	local liftL = math.max(0, s) * 0.14 * walk
+	local liftR = math.max(0, -s) * 0.14 * walk
+
+	-- Head: the chicken head-lock (holds still, then snaps forward each step), idle pecks and
+	-- glances, a look back when shooting.
+	local stepT = (phase / math.pi) % 1
+	local lock = if stepT < 0.7 then stepT / 0.7 else 1 - (stepT - 0.7) / 0.3
+	local neckZ = (lock - 0.5) * 0.32 * walk - 0.22 * peck + 0.12 * glide
+	local neckY = -0.14 * peck - 0.08 * land
+	local neckPitch = -0.75 * peck + 0.08 * flapAir + 0.25 * glide - 0.15 * shoot
+	local neckYaw = look + 0.5 * shoot
+	local neckRoll = 0.08 * shoot
+
+	-- Wings: a few strong flaps going up, wide and steady with a gentle beat gliding, flared
+	-- when shooting, tucked and barely moving on the ground (plus the odd ruffle).
+	local flapRate = if glide > 0.5 then 9 else 16
+	rig.flapPhase += dt * flapRate * math.max(air, 0.15)
+	local flap = flapAir * (0.55 + math.sin(rig.flapPhase) * 0.55)
+	local spread = glide * (1.2 + math.sin(rig.flapPhase) * 0.08)
 	local wingOut = flap + spread
-		+ math.sin(phase * 2) * 0.12 * walk
-		+ math.sin(t * 2 + rig.seed) * 0.03 * idle
-		+ 0.7 * shoot
-		+ ruffle * (0.5 + math.sin(t * 30) * 0.35)
-	local wingSweep = -0.25 * glide + 0.2 * flap
-	setT(rig, "LeftWing", CFrame.Angles(wingSweep, 0, -wingOut))
-	setT(rig, "RightWing", CFrame.Angles(wingSweep, 0, wingOut))
+		+ math.sin(phase * 2) * 0.06 * walk
+		+ 0.55 * shoot
+		+ ruffle * (0.35 + math.sin(t * 28) * 0.25)
+	local wingSweep = -0.2 * glide + 0.15 * flap
 	if idle > 0.8 and t > rig.nextRuffle then
 		rig.ruffleStart = t
 		rig.nextRuffle = t + 10 + math.random() * 12
 	end
 	for _, trail in rig.trails do
-		trail.Enabled = glide > 0.5
+		trail.Enabled = glide > 0.6
 	end
 
-	-- Tail: wags idle and walking, fans up in the air, flicks up hard as the egg pops out.
-	local wag = math.sin(t * 3.2 + rig.seed) * 0.15 * idle + math.sin(phase * 2) * 0.25 * walk
-	setT(rig, "Tail", CFrame.Angles(0.25 * air - 0.2 * glide - 0.9 * shoot, wag, wag * 0.3))
+	-- Tail: a light sway, lifts in the air, flicks up as the egg pops out.
+	local tailYaw = math.sin(t * 2.6 + rig.seed) * 0.1 * idle + math.sin(phase * 2) * 0.16 * walk
+	local tailPitch = 0.18 * air - 0.15 * glide - 0.8 * shoot
+
+	-- Smooth every channel, then pose the joints.
+	local p = {
+		bodyY = bodyY, bodyPitch = bodyPitch, bodyRoll = bodyRoll, bodyYaw = bodyYaw,
+		legL = legL, legR = legR, liftL = liftL, liftR = liftR,
+		neckZ = neckZ, neckY = neckY, neckPitch = neckPitch, neckYaw = neckYaw, neckRoll = neckRoll,
+		wingL = wingOut, wingR = wingOut, wingSweep = wingSweep,
+		tailPitch = tailPitch, tailYaw = tailYaw,
+	}
+	local q: { [string]: number } = {}
+	for _, name in CHANNELS do
+		q[name] = spring(rig, name, p[name], dt)
+	end
+	setT(rig, "Root", CFrame.new(0, q.bodyY, 0) * CFrame.Angles(q.bodyPitch, q.bodyYaw, q.bodyRoll))
+	setT(rig, "LeftHip", CFrame.new(0, q.liftL, 0) * CFrame.Angles(q.legL, 0, 0.1 * land))
+	setT(rig, "RightHip", CFrame.new(0, q.liftR, 0) * CFrame.Angles(q.legR, 0, -0.1 * land))
+	setT(rig, "Neck", CFrame.new(0, q.neckY, q.neckZ) * CFrame.Angles(q.neckPitch, q.neckYaw, q.neckRoll))
+	setT(rig, "LeftWing", CFrame.Angles(q.wingSweep, 0, -q.wingL))
+	setT(rig, "RightWing", CFrame.Angles(q.wingSweep, 0, q.wingR))
+	setT(rig, "Tail", CFrame.Angles(q.tailPitch, q.tailYaw, q.tailYaw * 0.3))
 
 	-- Blink (and squint when shooting).
 	if t > rig.nextBlink then

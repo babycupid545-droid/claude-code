@@ -406,13 +406,16 @@ local function meshCar(spec: MeshCar): Model?
 	return m
 end
 
--- True when the vehicle meshes are imported but `folder` still holds part-built cars.
+-- Bump when mesh cars need rebuilding (e.g. the import correction changed).
+CarBuilder.Version = 2
+
+-- True when the vehicle meshes are imported but `folder` still holds part-built or outdated cars.
 function CarBuilder.needsUpgrade(folder: Instance): boolean
 	if not Meshes.available("Sedan") then
 		return false
 	end
 	for _, car in folder:GetChildren() do
-		if car:GetAttribute("MeshCar") ~= true then
+		if car:GetAttribute("MeshCar") ~= true or car:GetAttribute("CarVersion") ~= CarBuilder.Version then
 			return true
 		end
 	end
@@ -427,6 +430,7 @@ function CarBuilder.build(folder: Instance)
 			if car then
 				finish(car)
 				car:SetAttribute("MeshCar", true)
+				car:SetAttribute("CarVersion", CarBuilder.Version)
 				car.Parent = folder
 			end
 		end

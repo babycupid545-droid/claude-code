@@ -22,7 +22,8 @@ Config.Timing = {
 
 Config.Map = {
 	-- Two roads run along the X axis with a grass median between them; chickens cross along Z.
-	--   sidewalk A | road A (lanes go +X) | median | road B (lanes go -X) | sidewalk B
+	--   sidewalk A | road A | median | road B | sidewalk B
+	-- Each road is two-way: half its lanes drive -X, half +X (see Layout.lanes).
 	RoadLength = 320,
 	LanesPerRoad = 4,
 	LaneWidth = 14,
@@ -43,10 +44,10 @@ Config.Map = {
 
 Config.Chicken = {
 	WalkSpeed = 14,
-	JumpPower = 75, -- about 14 studs high: enough to clear a car with good timing
+	JumpPower = 62, -- about 10 studs high: clears a car only with good timing
 	GlideFallSpeed = 9,
 	GlideHorizontalSpeed = 26,
-	GlideStamina = 1.6, -- seconds of gliding
+	GlideStamina = 1.0, -- seconds of gliding
 	GlideRecharge = 2.0, -- stamina per second while on the ground (refills in under a second)
 }
 
@@ -79,7 +80,7 @@ Config.Egg = {
 	Speed = 140,
 	Gravity = 40,
 	Lifetime = 1.6,
-	Cooldown = 0.5,
+	Cooldown = 1.2, -- seconds between eggs (shown under the stats bar)
 	Radius = 0.6,
 	KnockbackHorizontal = 60,
 	KnockbackUp = 28,
@@ -92,6 +93,7 @@ Config.Shuttle = {
 	FirstPhase = 25, -- seconds to make the first crossing (walking the 142-stud gap takes ~10s)
 	PhaseStep = 2, -- each following phase is this much shorter...
 	MinPhase = 15, -- ...down to this
+	EarlyAfter = 3, -- once every chicken is across (and at least this long has passed), move on
 	Warning = 4, -- tiles shake and flash for this long before dropping
 	RiseDelay = 3, -- how long a dropped sidewalk stays down
 }
@@ -136,8 +138,8 @@ Config.Rewards = {
 	Participate = 10,
 	SurviveEvery = 30, -- seconds alive per survival bonus
 	SurviveCoins = 5,
-	Knockout = 15, -- egging someone shortly before they die
-	KnockoutWindow = 4,
+	Knockout = 25, -- the last chicken to egg someone gets this when they die
+	KnockoutWindow = 0, -- seconds the egg credit lasts (0 = until the chicken dies)
 	Win = 50,
 	TeamWin = 30,
 }

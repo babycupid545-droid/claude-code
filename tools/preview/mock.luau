@@ -54,7 +54,14 @@ end
 function V3.Dot(a, b)
 	return a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 end
-local Vector3 = { new = V3.new, one = V3.new(1, 1, 1), zero = V3.new(0, 0, 0) }
+local Vector3 = {
+	new = V3.new,
+	one = V3.new(1, 1, 1),
+	zero = V3.new(0, 0, 0),
+	xAxis = V3.new(1, 0, 0),
+	yAxis = V3.new(0, 1, 0),
+	zAxis = V3.new(0, 0, 1),
+}
 
 -- CFrame: rotation matrix r (row-major 3x3) + position p --------------------------------------
 local CF = {}
@@ -137,6 +144,10 @@ function CFrame.Angles(a, b, c)
 	return mkcf(mat_mul(mat_mul(rx(a), ry(b)), rz(c)), V3.new(0, 0, 0))
 end
 CFrame.fromEulerAnglesXYZ = CFrame.Angles
+function CFrame.fromMatrix(pos, vx, vy, vz)
+	vz = vz or vx:Cross(vy)
+	return mkcf({ vx[1], vy[1], vz[1], vx[2], vy[2], vz[2], vx[3], vy[3], vz[3] }, pos)
+end
 function CFrame.lookAt(at, target, up)
 	up = up or V3.new(0, 1, 0)
 	local look = (target - at).Unit

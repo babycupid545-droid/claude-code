@@ -104,6 +104,11 @@ local function aimDirection(origin: Vector3, character: Model): Vector3
 	return dir.Unit
 end
 
+-- How recharged your next egg is, 0..1 (1 = ready).
+function EggController.charge(): number
+	return math.clamp((os.clock() - lastShot) / Config.Egg.Cooldown, 0, 1)
+end
+
 local function shoot()
 	local now = os.clock()
 	if now - lastShot < Config.Egg.Cooldown then

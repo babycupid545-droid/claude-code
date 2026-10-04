@@ -23,6 +23,7 @@ local RoundState = require(Shared.RoundState)
 
 local Anim = require(script.Parent.Parent.Anim)
 local CameraFx = require(script.Parent.Parent.CameraFx)
+local EggController = require(script.Parent.EggController)
 local Effects = require(script.Parent.Parent.Effects)
 local Gui = require(script.Parent.Parent.Gui)
 local MovementController = require(script.Parent.MovementController)
@@ -505,6 +506,11 @@ local function wins(p: Player): number
 	return if w and w:IsA("IntValue") then w.Value else 0
 end
 
+local function knockouts(p: Player): number
+	local kos = p:GetAttribute("RoundKOs")
+	return if type(kos) == "number" then kos else 0
+end
+
 local function renderBoard(s: string)
 	if os.clock() - lastBoard < 0.5 then
 		return
@@ -520,13 +526,14 @@ local function renderBoard(s: string)
 				return aa
 			end
 		end
-		local wa, wb = wins(a), wins(b)
+		local wa, wb = if inRound then knockouts(a) else wins(a), if inRound then knockouts(b) else wins(b)
 		if wa ~= wb then
 			return wa > wb
 		end
 		return a.DisplayName < b.DisplayName
 	end)
 	local mode = currentMode()
+	inner.Stat.Text = if inRound then "KOs" else "WINS"
 	if inRound then
 		inner.Title.Text = if mode then string.upper(mode.name) else "ROUND"
 		local total = RoundState:GetAttribute("RoundPlayers")
@@ -554,7 +561,7 @@ local function renderBoard(s: string)
 		row.LayoutOrder = i
 		row.Rank.Text = `{i}.`
 		row.Player.Text = p.DisplayName .. (if p:GetAttribute("Afk") == true then " (AFK)" else "")
-		row.Value.Text = tostring(wins(p))
+		row.Value.Text = tostring(if inRound then knockouts(p) else wins(p))
 		local out = inRound and p:GetAttribute("Alive") ~= true
 		row.Player.TextTransparency = if out then 0.55 else 0
 		row.Rank.TextTransparency = if out then 0.55 else 0
@@ -597,6 +604,11 @@ local function onStateChanged()
 			resetCamera()
 		end
 	end
+	-- While voting, everything but the round card and the vote gets out of the way.
+	local voting = s == "Voting"
+	for _, widget in { ui.objective, ui.board, ui.feed, ui.stats, ui.buttons } do
+		Anim.setShown(widget, not voting)
+	end
 	Anim.punch(ui.roundCard, 0.06)
 	lastState = s
 	lastSecond = -1
@@ -621,6 +633,7 @@ end
 
 local lastAlive = -1
 local wasAlive = false
+local eggReady = true
 local lastRoundCardKey = ""
 
 local function renderRoundCard(s: string, left: number)
@@ -709,8 +722,20 @@ local function render()
 	renderObjective(s, alive)
 	renderBoard(s)
 
+	-- Egg recharge: a thin bar that fills back up after each shot, with a pop when it's ready.
+	local playing = s == "InRound" and alive
+	Anim.setShown(ui.eggCharge, playing)
+	local charge = EggController.charge()
+	ui.eggCharge.Track.Fill.Size = UDim2.fromScale(math.max(0.02, charge), 1)
+	ui.eggCharge.Track.Fill.BackgroundColor3 = if charge >= 1 then Color3.fromRGB(255, 246, 228) else Color3.fromRGB(196, 170, 130)
+	ui.eggCharge.Icon.ImageTransparency = if charge >= 1 then 0 else 0.45
+	if charge >= 1 and not eggReady and playing then
+		Anim.punch(ui.eggCharge, 0.12)
+	end
+	eggReady = charge >= 1
+
 	-- Stamina.
-	Anim.setShown(ui.stamina, s == "InRound" and alive)
+	Anim.setShown(ui.stamina, playing)
 	local fill = ui.stamina.Track.Fill
 	fill.Size = UDim2.fromScale(math.max(0.02, MovementController.getStamina()), 1)
 	fill.BackgroundColor3 = if MovementController.isGliding() then Color3.fromRGB(150, 220, 255) else YELLOW
@@ -794,6 +819,7 @@ function RoundUI.start()
 		board = Gui.find(root, "Board"),
 		feed = Gui.find(root, "Feed"),
 		stamina = Gui.find(root, "Stamina"),
+		eggCharge = Gui.find(root, "EggCharge"),
 		spectateBar = Gui.find(root, "SpectateBar"),
 		intro = Gui.find(root, "Intro"),
 		countdown = Gui.find(root, "Countdown"),

@@ -46,27 +46,32 @@ local function part(props: { [string]: any }): Part
 	return p
 end
 
+-- A soft column of green light over the target sidewalk, a ring on the ground and a chevron
+-- bobbing above it. Built around the origin so PivotTo just moves it (no rotation).
 local function buildBeacon(): Model
 	local m = Instance.new("Model")
 	m.Name = "CrossBeacon"
-	local pillar = part({ Name = "Pillar", Shape = Enum.PartType.Cylinder, Size = Vector3.new(60, 6, 6), Color = GREEN, Transparency = 0.75 })
-	pillar.CFrame = CFrame.new(0, 30, 0) * CFrame.Angles(0, 0, math.rad(90))
-	pillar.Parent = m
-	-- A big chevron arrow pointing down at the safe side.
-	for _, arm in { -1, 1 } do
-		local bar = part({ Name = "Arrow", Size = Vector3.new(9, 2.2, 2.2), Color = GREEN })
-		bar.CFrame = CFrame.new(arm * 2.8, 18, 0) * CFrame.Angles(0, 0, arm * math.rad(-45))
+	local column = part({ Name = "Column", Shape = Enum.PartType.Cylinder, Size = Vector3.new(70, 7, 7), Color = GREEN, Transparency = 0.82 })
+	column.CFrame = CFrame.new(0, 35, 0) * CFrame.Angles(0, 0, math.rad(90))
+	column.Parent = m
+	local core = part({ Name = "Core", Shape = Enum.PartType.Cylinder, Size = Vector3.new(70, 2.2, 2.2), Color = GREEN, Transparency = 0.6 })
+	core.CFrame = column.CFrame
+	core.Parent = m
+	local ring = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.15, 16, 16), Color = GREEN, Transparency = 0.55 })
+	ring.CFrame = CFrame.new(0, Config.Map.SidewalkTopY + 0.12, 0) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Parent = m
+	-- Down-pointing chevron, made of two bars meeting at the bottom.
+	for _, side in { -1, 1 } do
+		local bar = part({ Name = "Arrow", Size = Vector3.new(1.4, 6, 1.4), Color = GREEN })
+		bar.CFrame = CFrame.new(side * 1.75, 16, 0) * CFrame.Angles(0, 0, -side * math.rad(40))
 		bar.Parent = m
 	end
-	local glow = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 20, 20), Color = GREEN, Transparency = 0.6 })
-	glow.CFrame = CFrame.new(0, Config.Map.SidewalkTopY + 0.15, 0) * CFrame.Angles(0, 0, math.rad(90))
-	glow.Parent = m
 	local light = Instance.new("PointLight")
 	light.Color = GREEN
-	light.Range = 30
-	light.Brightness = 2
-	light.Parent = glow
-	m.PrimaryPart = glow
+	light.Range = 26
+	light.Brightness = 1.5
+	light.Parent = ring
+	m.WorldPivot = CFrame.new()
 	m.Parent = workspace
 	return m
 end
@@ -98,12 +103,22 @@ local function stepBeacon()
 	local x = if root then math.clamp(root.Position.X, -Layout.halfLength + 20, Layout.halfLength - 20) else 0
 	-- Hide it once you're already there.
 	local there = root ~= nil and Layout.zoneOf(root.Position.Z) == target
-	local bob = math.sin(os.clock() * 4) * 1.5
-	b:PivotTo(CFrame.new(x, bob, z))
+	b:PivotTo(CFrame.new(x, 0, z))
+	-- Only the chevron bobs and spins; fade it all right down once you're there.
+	local t = os.clock()
+	local arrows = {}
 	for _, p in b:GetChildren() do
 		if p:IsA("BasePart") then
-			p.LocalTransparencyModifier = if there then 0.85 else 0
+			p.LocalTransparencyModifier = if there then 0.8 else 0
+			if p.Name == "Arrow" then
+				table.insert(arrows, p)
+			end
 		end
+	end
+	local bob = math.sin(t * 3) * 1.2
+	for i, p in arrows do
+		local side = if i == 1 then -1 else 1
+		p.CFrame = CFrame.new(x, 16 + bob, z) * CFrame.Angles(0, t * 1.5, 0) * CFrame.new(side * 1.75, 0, 0) * CFrame.Angles(0, 0, -side * math.rad(40))
 	end
 end
 

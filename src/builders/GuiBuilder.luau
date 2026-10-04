@@ -91,12 +91,25 @@ local function buildStats(root: Frame)
 	statGroup(row, "Alive", "chick", "0/0", 2, false)
 	statGroup(row, "Eggs", "eggCoin", "0", 3, true)
 
-	-- Glide stamina, just above the stats bar.
+	-- Egg recharge and glide stamina, just above the stats bar.
+	local eggs = hidden(new("Frame", {
+		Name = "EggCharge",
+		AnchorPoint = V2(1, 1),
+		Position = UDim2.new(0.5, -10, 1, -72),
+		Size = UDim2.fromOffset(150, 22),
+		BackgroundTransparency = 1,
+		Parent = root,
+	}, { Kit.scale() }))
+	Kit.icon("Icon", "egg", 24, { AnchorPoint = V2(0, 0.5), Position = UDim2.fromScale(0, 0.5), Parent = eggs })
+	local eggTrack = Kit.bar("Track", V2(10, 10), T.Cream, { AnchorPoint = V2(0, 0.5), Position = UDim2.new(0, 30, 0.5, 0), Parent = eggs })
+	eggTrack.Size = UDim2.new(1, -30, 0, 10)
+	Kit.stroke(T.Gold, 1.5, 0.2).Parent = eggTrack
+
 	local stamina = hidden(new("Frame", {
 		Name = "Stamina",
-		AnchorPoint = V2(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -72),
-		Size = UDim2.fromOffset(250, 22),
+		AnchorPoint = V2(0, 1),
+		Position = UDim2.new(0.5, 10, 1, -72),
+		Size = UDim2.fromOffset(150, 22),
 		BackgroundTransparency = 1,
 		Parent = root,
 	}, { Kit.scale() }))
@@ -157,8 +170,17 @@ local function buildBoard(root: Frame, tpl: Folder)
 	Kit.icon("Icon", "trophy", 22, { Position = UDim2.fromOffset(12, 9), Parent = inner })
 	Kit.text("Title", "TOP CHICKENS", 16, {
 		Position = UDim2.fromOffset(40, 8),
-		Size = UDim2.new(1, -52, 0, 22),
+		Size = UDim2.new(1, -110, 0, 22),
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextColor3 = T.Pink,
+		Parent = inner,
+	})
+	Kit.text("Stat", "WINS", 13, {
+		AnchorPoint = V2(1, 0),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.fromOffset(60, 18),
+		TextColor3 = T.InkSoft,
+		TextXAlignment = Enum.TextXAlignment.Right,
 		Parent = inner,
 	})
 	Kit.text("Big", "LOBBY", 24, {
@@ -798,7 +820,7 @@ end
 
 GuiBuilder.Names = { "Hud", "Shop", "Emotes", "Driver" }
 -- Bump when the GUI changes enough that older built copies should be replaced.
-GuiBuilder.Version = 3
+GuiBuilder.Version = 4
 
 function GuiBuilder.build(parent: Instance, only: string?)
 	local builders: { [string]: (Instance) -> () } = {

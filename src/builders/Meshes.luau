@@ -1,13 +1,19 @@
 --!strict
 -- Turns the imported Blender meshes into ready-made models.
 --
--- After File > Import 3D of assets/models/*.glb, the MeshParts (named "<Asset>__<Region>",
--- e.g. "Chicken__Body") go anywhere inside ReplicatedStorage.Assets.Meshes. This module
--- finds them by name and lays them out from MeshManifest (the authored position and size of
--- every region), so it doesn't matter how the importer scaled or centred them.
+-- After File > Import 3D of assets/models/*.glb (or .fbx), the MeshParts (named
+-- "<Asset>__<Region>", e.g. "Chicken__Body") go anywhere inside
+-- ReplicatedStorage.Assets.Meshes. This module finds them by name and lays them out using
+-- MeshManifest (the authored position and size of every region).
+--
+-- Importers don't all agree on axes, units or facing direction (the glTF importer, for one,
+-- turns models around to face Roblox's forward). So for each imported file this works out
+-- how the import was turned, scaled and moved, by matching where every piece landed against
+-- where it was authored, and undoes that. Pieces then always come out the right way round,
+-- whatever the import settings were.
 --
 -- If an asset's meshes are missing (not imported yet), `build` returns nil and the builders
--- fall back to their part-based versions.
+-- fall back to their part-built versions.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -27,6 +33,9 @@ export type Options = {
 	-- Regions to leave out (e.g. a duck has no comb).
 	skip: { [string]: boolean }?,
 }
+
+-- How one imported file relates to the authored scene: imported = translation + scale * rotation * authored.
+type Fit = { rotation: CFrame, scale: number, translation: Vector3 }
 
 local warned: { [string]: boolean } = {}
 
@@ -61,27 +70,119 @@ local function index(): { [string]: MeshPart }
 	return found
 end
 
--- Does the imported mesh have the authored proportions? (Catches a mesh that was imported
--- rotated, e.g. with a different "up" axis.)
-local function proportionsMatch(part: MeshPart, size: Vector3): boolean
-	local ratios = {}
-	for _, axis in { "X", "Y", "Z" } do
-		local authored = (size :: any)[axis] :: number
-		if authored > 0.4 then
-			table.insert(ratios, ((part.Size :: any)[axis] :: number) / authored)
+-- The 24 ways to turn a box onto its axes (every axis-aligned rotation).
+local ROTATIONS: { CFrame } = {}
+do
+	local axes = { Vector3.xAxis, Vector3.yAxis, Vector3.zAxis }
+	for _, x in axes do
+		for _, y in axes do
+			if y ~= x then
+				for _, sx in { 1, -1 } do
+					for _, sy in { 1, -1 } do
+						local vx, vy = x * sx, y * sy
+						table.insert(ROTATIONS, CFrame.fromMatrix(Vector3.zero, vx, vy, vx:Cross(vy)))
+					end
+				end
+			end
 		end
 	end
-	if #ratios < 2 then
-		return true
-	end
-	local lo, hi = math.huge, 0
-	for _, r in ratios do
-		lo = math.min(lo, r)
-		hi = math.max(hi, r)
-	end
-	-- Tight enough to also catch meshes from an older version of the model.
-	return hi / lo < 1.08
 end
+
+-- Works out how `file` was imported, from all of its pieces that are present.
+local fits: { [string]: Fit } = {}
+local unfit: { [string]: boolean } = {}
+local function fitFor(file: string, all: { [string]: MeshPart }): Fit?
+	if unfit[file] then
+		return nil
+	end
+	local cached = fits[file]
+	if cached then
+		return cached
+	end
+	local authored: { Vector3 } = {}
+	local imported: { Vector3 } = {}
+	for asset, entry in Manifest do
+		if entry.file == file then
+			for key, region in entry.regions do
+				local part = all[`{asset}__{key}`]
+				if part then
+					table.insert(authored, region.center)
+					table.insert(imported, part.Position)
+				end
+			end
+		end
+	end
+	local n = #authored
+	if n < 3 then
+		unfit[file] = true
+		return nil
+	end
+	local ca, ci = Vector3.zero, Vector3.zero
+	for i = 1, n do
+		ca += authored[i]
+		ci += imported[i]
+	end
+	ca /= n
+	ci /= n
+	local spreadA, spreadI = 0, 0
+	for i = 1, n do
+		spreadA += (authored[i] - ca).Magnitude ^ 2
+		spreadI += (imported[i] - ci).Magnitude ^ 2
+	end
+	if spreadA < 1e-6 or spreadI < 1e-6 then
+		-- The importer put every piece in the same place; nothing to line up against.
+		unfit[file] = true
+		return nil
+	end
+	local best: Fit? = nil
+	local bestError = math.huge
+	for _, rotation in ROTATIONS do
+		local dot = 0
+		for i = 1, n do
+			dot += (imported[i] - ci):Dot(rotation * (authored[i] - ca))
+		end
+		local scale = dot / spreadA
+		if scale > 0 then
+			local err = 0
+			for i = 1, n do
+				err += ((imported[i] - ci) - rotation * (authored[i] - ca) * scale).Magnitude ^ 2
+			end
+			if err < bestError then
+				bestError = err
+				best = { rotation = rotation, scale = scale, translation = ci - rotation * ca * scale }
+			end
+		end
+	end
+	if not best or bestError / spreadI > 0.02 then
+		warnOnce(file, `{file}: the imported pieces don't line up with the model (were some moved?). Delete them and import assets/models/{file} again`)
+		unfit[file] = true
+		return nil
+	end
+	fits[file] = best
+	return best
+end
+
+-- Does the imported piece have the authored shape (in any orientation)? Catches meshes from an
+-- older version of the model.
+local function shapeMatches(part: MeshPart, size: Vector3, fit: Fit?): boolean
+	local a = { size.X, size.Y, size.Z }
+	local b = { part.Size.X, part.Size.Y, part.Size.Z }
+	table.sort(a)
+	table.sort(b)
+	local s = if fit then fit.scale else b[3] / math.max(a[3], 1e-3)
+	for i = 1, 3 do
+		if a[i] > 0.4 then
+			local ratio = b[i] / (a[i] * s)
+			if ratio < 0.93 or ratio > 1.07 then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+-- Remembers which fit each found piece uses (for `place`).
+local fitOf: { [MeshPart]: Fit } = setmetatable({}, { __mode = "k" }) :: any
 
 -- Returns every imported region of `asset`, or nil if any is missing or looks wrong.
 function Meshes.regions(asset: string): { [string]: MeshPart }?
@@ -90,6 +191,9 @@ function Meshes.regions(asset: string): { [string]: MeshPart }?
 		return nil
 	end
 	local all = index()
+	table.clear(fits)
+	table.clear(unfit)
+	local fit = fitFor(entry.file, all)
 	local out: { [string]: MeshPart } = {}
 	for key, region in entry.regions do
 		local part = all[`{asset}__{key}`]
@@ -99,9 +203,12 @@ function Meshes.regions(asset: string): { [string]: MeshPart }?
 			end
 			return nil
 		end
-		if not proportionsMatch(part, region.size) then
+		if not shapeMatches(part, region.size, fit) then
 			warnOnce(asset, `{asset}__{key} doesn't match the current model: delete the old {asset} meshes from ReplicatedStorage.Assets.Meshes and import assets/models/{entry.file} again. Using the part-built version for now`)
 			return nil
+		end
+		if fit then
+			fitOf[part] = fit
 		end
 		out[key] = part
 	end
@@ -127,8 +234,20 @@ function Meshes.place(source: MeshPart, region: Manifest.Region, base: CFrame, s
 	pcall(function()
 		part.TextureID = ""
 	end)
-	part.Size = region.size * scale
-	part.CFrame = base * CFrame.new(region.center * scale)
+	local fit = fitOf[source]
+	if fit then
+		-- Undo the import's turn, scale and offset: back to authored space, keeping the piece's
+		-- own orientation relative to the file.
+		local inverse = fit.rotation:Inverse()
+		local position = inverse * (source.Position - fit.translation) / fit.scale
+		local rotation = inverse * source.CFrame.Rotation
+		part.Size = source.Size * (scale / fit.scale)
+		part.CFrame = base * CFrame.new(position * scale) * rotation
+	else
+		-- Couldn't work out the import; trust the authored layout.
+		part.Size = region.size * scale
+		part.CFrame = base * CFrame.new(region.center * scale)
+	end
 	part.Material = Enum.Material.SmoothPlastic
 	part.CastShadow = true
 	part.DoubleSided = false

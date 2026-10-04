@@ -21,6 +21,9 @@ local GuiBuilder = require(script.Parent.GuiBuilder)
 local LightingBuilder = require(script.Parent.LightingBuilder)
 local WorldBuilder = require(script.Parent.WorldBuilder)
 
+-- Bump when the arena or lobby layout changes so older built copies get replaced.
+local WORLD_VERSION = 2
+
 local function childFolder(parent: Instance, name: string): Folder
 	local existing = parent:FindFirstChild(name)
 	if existing and existing:IsA("Folder") then
@@ -68,11 +71,23 @@ return function()
 		end
 	end
 
+	-- An arena or lobby from an older version is replaced; the old one is kept in
+	-- ServerStorage.OldWorld in case you had decorated it.
+	for _, name in { "Arena", "Lobby" } do
+		local existing = workspace:FindFirstChild(name)
+		if existing and existing:GetAttribute("WorldVersion") ~= WORLD_VERSION then
+			local old = ServerStorage:FindFirstChild("OldWorld") or Instance.new("Folder")
+			old.Name = "OldWorld"
+			old.Parent = ServerStorage
+			existing.Parent = old
+			print(`[Build] {name}: replaced with the new version (old one moved to ServerStorage.OldWorld)`)
+		end
+	end
 	step("Arena", workspace:FindFirstChild("Arena") ~= nil, function()
-		WorldBuilder.buildArena(workspace)
+		WorldBuilder.buildArena(workspace):SetAttribute("WorldVersion", WORLD_VERSION)
 	end)
 	step("Lobby", workspace:FindFirstChild("Lobby") ~= nil, function()
-		WorldBuilder.buildLobby(workspace)
+		WorldBuilder.buildLobby(workspace):SetAttribute("WorldVersion", WORLD_VERSION)
 	end)
 	local cars = assetsFolder("Cars")
 	step("Cars", #cars:GetChildren() > 0 and not CarBuilder.needsUpgrade(cars), function()

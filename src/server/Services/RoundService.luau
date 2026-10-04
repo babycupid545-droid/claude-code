@@ -218,14 +218,17 @@ local function eliminate(r: Round, player: Player, reason: string, icon: string)
 	r.alive[player] = false
 	player:SetAttribute("Alive", false)
 
-	-- Credit whoever egged this chicken just before it died.
+	-- Credit the last chicken that egged this one (the kill counts however it died).
 	local egged = r.lastEgged[player]
 	local shooter = egged and egged.shooter
-	if egged and shooter and shooter.Parent and os.clock() - egged.at <= Config.Rewards.KnockoutWindow then
+	local window = Config.Rewards.KnockoutWindow
+	if egged and shooter and shooter ~= player and shooter.Parent and (window <= 0 or os.clock() - egged.at <= window) then
 		feed(`{shooter.DisplayName} egged {player.DisplayName} to their doom!`, "egg")
 		Remotes.Notify:FireClient(shooter, `KNOCKOUT! {player.DisplayName}`, "knockout", 0)
 		DataService.addStat(shooter, "Knockouts", 1)
-		DataService.reward(shooter, Config.Rewards.Knockout, "knockout")
+		DataService.reward(shooter, Config.Rewards.Knockout, "for the knockout")
+		local kos = shooter:GetAttribute("RoundKOs")
+		shooter:SetAttribute("RoundKOs", (if type(kos) == "number" then kos else 0) + 1)
 	else
 		feed(`{player.DisplayName} {reason}`, icon)
 	end
@@ -291,6 +294,21 @@ end
 
 -- Everyone starts on side A. They must reach the other side before the one they left
 -- crumbles; it rises again a few seconds later and they must cross back. Each phase is shorter.
+-- True once every chicken still in the round is standing on `target`.
+local function allAcross(r: Round, target: Side): boolean
+	local any = false
+	for player, alive in r.alive do
+		if alive then
+			local root = ChickenService.getRoot(player)
+			if not root or Layout.zoneOf(root.Position.Z) ~= target then
+				return false
+			end
+			any = true
+		end
+	end
+	return any
+end
+
 local function runCrossing(r: Round, roundStart: number)
 	local S = Config.Shuttle
 	local leaving: Side = "A"
@@ -298,18 +316,33 @@ local function runCrossing(r: Round, roundStart: number)
 	local deadline = roundStart + phase
 	while not r.ended do
 		local target: Side = if leaving == "A" then "B" else "A"
+		local phaseStart = now()
 		RoundState:SetAttribute("CrossTarget", target)
 		RoundState:SetAttribute("CrossDeadline", deadline)
 		feed(`Run to the {Layout.sideName(target)} side!`, "arrowRight")
 
-		task.wait(math.max(0, deadline - S.Warning - now()))
+		-- Wait for the deadline, but move straight on once every chicken has made it across.
+		local warned = false
+		local early = false
+		while now() < deadline do
+			if r.ended then
+				return
+			end
+			if now() - phaseStart >= S.EarlyAfter and allAcross(r, target) then
+				early = true
+				break
+			end
+			if not warned and now() >= deadline - S.Warning then
+				warned = true
+				SidewalkService.warnSide(leaving)
+			end
+			task.wait(0.2)
+		end
 		if r.ended then
 			return
 		end
-		SidewalkService.warnSide(leaving)
-		task.wait(math.max(0, deadline - now()))
-		if r.ended then
-			return
+		if early then
+			feed(`Everyone made it! Back to the {Layout.sideName(leaving)} side!`, "check")
 		end
 		SidewalkService.dropSide(leaving)
 
@@ -384,6 +417,9 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	round = r
 	RoundState:SetAttribute("ModeId", mode.id)
 	RoundState:SetAttribute("RoundPlayers", #r.participants)
+	for _, player in Players:GetPlayers() do
+		player:SetAttribute("RoundKOs", 0)
+	end
 
 	-- Teams: shuffle then deal players onto the two sides.
 	local shuffled = table.clone(r.participants)

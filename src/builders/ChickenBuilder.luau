@@ -20,7 +20,7 @@ local Meshes = require(script.Parent.Meshes)
 local ChickenBuilder = {}
 
 -- Bump when the chicken model changes so already-built rigs get rebuilt.
-ChickenBuilder.RigVersion = 2
+ChickenBuilder.RigVersion = 3
 
 local HIP_HEIGHT = 1.3
 local ROOT_SIZE = Vector3.new(2.2, 2, 2.2)

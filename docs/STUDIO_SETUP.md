@@ -55,6 +55,9 @@ and everyone spawns in the lobby). **Ctrl+Z** undoes the whole build.
   `Body`). Keep `HumanoidRootPart`, the `Humanoid`, and the joints (`Root`, `Neck`, `LeftWing`,
   `RightWing`, `LeftHip`, `RightHip`, `Tail`) since the animation drives those. `LidL`/`LidR`
   are the blinking eyelids.
+- **Updates rebuild themselves:** when a new version changes the arena, lobby, cars or
+  chickens, running the command replaces the old ones (old arena/lobby copies go to
+  `ServerStorage > OldWorld`).
 - **To rebuild something from scratch**, delete it and run the command again. It only builds
   what's missing, so the rest of your edits are kept.
 - If you forget to build, the game still runs: it builds a temporary copy at runtime and warns
@@ -95,8 +98,10 @@ exported as three files:
    Chickens and cars switch to the meshes automatically; the arena and lobby are rebuilt with
    the new trees, barns, windmills and so on.
 
-Their size doesn't matter (the builders resize every piece from
-`src/builders/MeshManifest.luau`), and names may get a suffix like `.001`. If something's off,
+Their size, position and facing don't matter: the builders work out how each file was imported
+(turned around, scaled, moved) from where its pieces landed and undo it, then size every piece
+from `src/builders/MeshManifest.luau`. Names may get a suffix like `.001`. Don't move pieces
+around inside an imported model, though (moving the whole model is fine). If something's off,
 the Output window says which piece is missing or looks rotated, and that model falls back to
 its part-built version. Every piece is under 3,000 triangles, so phones are fine.
 

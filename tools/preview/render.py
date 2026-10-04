@@ -33,8 +33,8 @@ local what, useMeshes = "%s", %s
 local root = Instance.new("Folder")
 local function mod(n) return mockRequire(builders:FindFirstChild(n)) end
 if useMeshes then
-	-- Pretend the .glb files were imported: one MeshPart per region, at half scale (the
-	-- builders must size them from the manifest).
+	-- Pretend the .glb files were imported: one MeshPart per region, at half scale, turned
+	-- around and moved (the builders must undo all of that).
 	local assets = Instance.new("Folder")
 	assets.Name = "Assets"
 	assets.Parent = service("ReplicatedStorage")
@@ -47,6 +47,8 @@ if useMeshes then
 			mp.Name = asset .. "__" .. key
 			mp.MeshId = asset .. "__" .. key
 			mp.Size = region.size * 0.5
+			-- Like the glTF importer: the whole file turned to face the other way (and moved).
+			mp.CFrame = CFrame.new(10, 0, 5) * CFrame.Angles(0, math.pi, 0) * CFrame.new(region.center * 0.5)
 			mp.Parent = meshes
 		end
 	end

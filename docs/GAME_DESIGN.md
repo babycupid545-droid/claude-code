@@ -165,8 +165,13 @@ src/
 | 7. Polish: Studio-built low-poly world + GUI, sprite-sheet UI art, 40 SFX, 3 music loops, tweens | ✅ built |
 
 ### Economy (built)
-Coins per round: 10 for playing, 5 per 30 s survived, 15 per knockout (egging someone who dies
-within 4 s), 50 for a Solo win / 30 each for a team win. VIP doubles round rewards.
+Golden eggs per round: 10 for playing, 5 per 30 s survived, 25 per knockout (the last chicken
+to egg someone gets the kill whenever and however they die; the board shows each round's KOs),
+50 for a Solo win / 30 each for a team win. VIP doubles round rewards.
+
+Crossings: everyone must reach the other sidewalk before the one they left crumbles. As soon as
+every chicken still in the round is across (after at least 3 s), the next crossing starts right
+away instead of waiting out the timer.
 Shop prices run from 200 (common) to 8000 (legendary); one exclusive per slot is Robux-only.
 All numbers are in `Config.Rewards` and `src/shared/Cosmetics.luau`.
 
