@@ -359,6 +359,24 @@ function Inst:Clone()
 	end
 	return o
 end
+function Inst:GetPivot()
+	local props = rawget(self, "_props")
+	return props.WorldPivot or props.CFrame or CFrame.new()
+end
+function Inst:PivotTo(cf)
+	local props = rawget(self, "_props")
+	if props.CFrame and PART_CLASSES[props.ClassName] then
+		props.CFrame = cf
+		return
+	end
+	local delta = cf * self:GetPivot():Inverse()
+	for _, d in self:GetDescendants() do
+		if PART_CLASSES[d.ClassName] then
+			d.CFrame = delta * d.CFrame
+		end
+	end
+	props.WorldPivot = cf
+end
 function Inst:ClearAllChildren()
 	for _, c in self:GetChildren() do
 		c.Parent = nil
