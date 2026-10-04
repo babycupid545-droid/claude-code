@@ -9,7 +9,7 @@ local ids = {
 	-- assets/ui/FarmSheet.png  (Image) - barn/wood HUD art and the golden egg currency icon
 	FarmSheet = 133433996440989,
 	-- assets/ui/IconSheet.png  (Image) - the clean icon set
-	IconSheet = 0,
+	IconSheet = 119392916023759,
 	-- assets/audio/Sfx.ogg  (Audio) - every sound effect in one file
 	Sfx = 91824233357331,
 	-- assets/audio/*.ogg  (Audio) - music loops
