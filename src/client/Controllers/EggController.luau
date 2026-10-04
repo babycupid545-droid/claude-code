@@ -16,6 +16,7 @@ local RoundState = require(Shared.RoundState)
 
 local ClientData = require(script.Parent.Parent.ClientData)
 local Effects = require(script.Parent.Parent.Effects)
+local Sfx = require(script.Parent.Parent.Sfx)
 
 local EggController = {}
 
@@ -125,6 +126,7 @@ local function shoot()
 		ClientData.equipped("EggSkin")
 	)
 	Remotes.ShootEgg:FireServer(direction, nextLocalId)
+	Sfx.play("EggShoot", { pitchJitter = 0.12 })
 end
 
 local function onAction(_: string, state: Enum.UserInputState, _input: InputObject): Enum.ContextActionResult
@@ -184,6 +186,7 @@ function EggController.start()
 			local shooter = Players:GetPlayerByUserId(shooterUserId)
 			local elapsed = workspace:GetServerTimeNow() - firedAt
 			spawnVisual(id, shooter and shooter.Character, origin, velocity, elapsed, skin)
+			Sfx.playAt("EggShoot", origin, { pitchJitter = 0.12 })
 		end
 	)
 	Remotes.EggHit.OnClientEvent:Connect(function(id: string, position: Vector3, hitEffect: string)

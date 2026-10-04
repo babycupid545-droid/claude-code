@@ -12,6 +12,9 @@ local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
 
+local Anim = require(script.Parent.Parent.Anim)
+local Gui = require(script.Parent.Parent.Gui)
+local Sfx = require(script.Parent.Parent.Sfx)
 local Ui = require(script.Parent.Parent.Ui)
 
 local DriverController = {}
@@ -23,7 +26,8 @@ local active = false
 local lane = math.ceil(M.LaneCount / 2)
 local lastLaunch = 0
 local gui: ScreenGui
-local cooldownLabel: TextLabel
+local cooldownFill: Frame
+local hint: TextLabel
 local laneMarker: Part? = nil
 
 local function laneZ(index: number): number
@@ -38,15 +42,22 @@ end
 
 local function changeLane(delta: number)
 	lane = math.clamp(lane + delta, 1, M.LaneCount)
+	Sfx.play("UiClick", { pitch = 1 + lane * 0.05 })
 	updateMarker()
 end
 
 local function launch(dir: number)
 	if os.clock() - lastLaunch < Config.RoadRage.Cooldown then
+		Sfx.play("Error")
 		return
 	end
 	lastLaunch = os.clock()
 	Remotes.LaunchRageCar:FireServer(lane, dir)
+	Sfx.play("RageHorn")
+	if laneMarker then
+		laneMarker.Transparency = 0.2
+		Anim.tween(laneMarker, 0.6, { Transparency = 0.7 })
+	end
 end
 
 local function onAction(name: string, state: Enum.UserInputState): Enum.ContextActionResult
@@ -114,51 +125,28 @@ local function setActive(on: boolean)
 	end
 end
 
-local function buildGui()
-	gui = Ui.new("ScreenGui", {
-		Name = "DriverGui",
-		ResetOnSpawn = false,
-		Enabled = false,
-		Parent = player:WaitForChild("PlayerGui"),
-	})
-	local panel = Ui.new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -16),
-		Size = UDim2.fromOffset(340, 150),
-		BackgroundTransparency = 1,
-		Parent = gui,
-	})
-	local function btn(text: string, pos: UDim2, onClick: () -> ())
-		local b = Ui.button(text, {
-			Size = UDim2.fromOffset(100, 56),
-			Position = pos,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Parent = panel,
-		})
-		b.Activated:Connect(onClick)
-	end
-	btn("▲", UDim2.new(0.5, 0, 0, 30), function()
+local function bindGui()
+	gui = Gui.screen("Driver")
+	Anim.autoJuice(gui)
+	local controls = Gui.find(gui, "Controls")
+	controls.Up.Activated:Connect(function()
 		changeLane(-1)
 	end)
-	btn("▼", UDim2.new(0.5, 0, 0, 92), function()
+	controls.Down.Activated:Connect(function()
 		changeLane(1)
 	end)
-	btn("◀ GO", UDim2.new(0, 50, 0, 60), function()
+	controls.Left.Activated:Connect(function()
 		launch(-1)
 	end)
-	btn("GO ▶", UDim2.new(1, -50, 0, 60), function()
+	controls.Right.Activated:Connect(function()
 		launch(1)
 	end)
-	cooldownLabel = Ui.label("", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -170),
-		Size = UDim2.fromOffset(400, 34),
-		Parent = gui,
-	})
+	cooldownFill = Gui.find(gui, "Controls/Cooldown/Fill")
+	hint = Gui.find(gui, "Controls/Cooldown/Hint")
 end
 
 function DriverController.start()
-	buildGui()
+	bindGui()
 	local function refresh()
 		setActive(shouldBeActive())
 	end
@@ -182,9 +170,10 @@ function DriverController.start()
 			return
 		end
 		local left = Config.RoadRage.Cooldown - (os.clock() - lastLaunch)
-		cooldownLabel.Text = if left > 0
-			then string.format("Reloading car... %.1f", left)
-			else "DRIVER: pick a lane (W/S) and send a car (A/D)"
+		local ready = left <= 0
+		cooldownFill.Size = UDim2.fromScale(math.clamp(1 - left / Config.RoadRage.Cooldown, 0, 1), 1)
+		cooldownFill.BackgroundColor3 = if ready then Color3.fromRGB(110, 230, 120) else Color3.fromRGB(255, 201, 60)
+		hint.Text = if ready then `LANE {lane} - READY!` else string.format("RELOADING %.1f", left)
 	end)
 end
 

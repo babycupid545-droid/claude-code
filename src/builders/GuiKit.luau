@@ -126,6 +126,7 @@ function Kit.text(name: string, text: string, props: Props?): TextLabel
 		TextColor3 = T.Text,
 		Font = T.BodyFont,
 		TextScaled = true,
+		TextWrapped = true,
 		Size = UDim2.fromScale(1, 1),
 	}, {
 		Kit.new("UIStroke", { Thickness = 2.5, Color = T.Outline, LineJoinMode = Enum.LineJoinMode.Round }),
@@ -239,7 +240,7 @@ end
 -- A chunky 3D push button: a darker Base sits under the Face, which drops on press.
 -- The button itself is the transparent TextButton, so `button.Activated` just works.
 -- Children of Face.Content: Icon (optional) and Label.
-function Kit.button(name: string, color: Color3, label: string?, sprite: string?, props: Props?): TextButton
+function Kit.button(name: string, color: Color3, label: string?, sprite: string?, props: Props?, corner: number?): TextButton
 	local button = Kit.new("TextButton", {
 		Name = name,
 		Text = "",
@@ -255,14 +256,14 @@ function Kit.button(name: string, color: Color3, label: string?, sprite: string?
 		Position = UDim2.new(0, 0, 0, 6),
 		BackgroundColor3 = Kit.shade(color, -0.45),
 		Parent = button,
-	}, { Kit.corner(0.3, true), Kit.stroke(3) })
+	}, { Kit.corner(corner or 0.3, true), Kit.stroke(3) })
 	local face = Kit.new("Frame", {
 		Name = "Face",
 		Size = UDim2.new(1, 0, 1, -4),
 		BackgroundColor3 = color,
 		Parent = button,
 	}, {
-		Kit.corner(0.3, true),
+		Kit.corner(corner or 0.3, true),
 		Kit.stroke(3),
 		Kit.vgradient(Color3.new(1, 1, 1), Color3.fromRGB(205, 205, 215)),
 	})

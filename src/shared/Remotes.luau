@@ -18,11 +18,11 @@ local NAMES = {
 	"Knockback", -- (velocity: Vector3)
 	"RageCar", -- (car: TrafficSchedule.Car)
 	"ChickenSplat", -- (userId: number, position: Vector3, velocity: Vector3)
-	"Feed", -- (text: string)
+	"Feed", -- (text: string, icon: string) icon is a UI sprite name
 	"WinEffect", -- (winners: { { userId: number, effect: string } })
 	"DataSync", -- (snapshot: DataSnapshot) the local player's saved data
 	"PlayEmote", -- (userId: number, itemId: string)
-	"Notify", -- (text: string) short toast, e.g. "+50 coins"
+	"Notify", -- (text: string, kind: "coin" | "error" | "unlock" | "knockout" | "info", amount: number)
 }
 
 local folder: Instance

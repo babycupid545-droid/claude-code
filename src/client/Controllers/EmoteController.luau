@@ -15,6 +15,7 @@ local Remotes = require(Shared.Remotes)
 
 local ClientData = require(script.Parent.Parent.ClientData)
 local Effects = require(script.Parent.Parent.Effects)
+local Sfx = require(script.Parent.Parent.Sfx)
 
 local EmoteController = {}
 
@@ -103,6 +104,14 @@ local function play(userId: number, itemId: string)
 
 	local look = item.look
 	local special = look.special
+	local soundFor: { [string]: string } = { Text = "Bawk", Spin = "Jump", Hop = "Boing", LayEgg = "Plop", Dance = "BawkLong" }
+	local soundName = soundFor[special or ""]
+	if soundName then
+		Sfx.playAt(soundName, root.Position, { pitchJitter = 0.1 })
+	end
+	if look.sparkles then
+		Sfx.playAt("Sparkle", root.Position)
+	end
 	if look.text then
 		Effects.floatText(root.Position + Vector3.new(0, 4, 0), look.text, Color3.fromRGB(255, 240, 120))
 	end

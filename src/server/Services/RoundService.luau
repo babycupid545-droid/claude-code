@@ -58,8 +58,9 @@ local function setState(state: string, duration: number?, message: string?)
 	RoundState:SetAttribute("Message", message or "")
 end
 
-local function feed(text: string)
-	Remotes.Feed:FireAllClients(text)
+-- Kill-feed line; `icon` is a sprite name from the UI sheet.
+local function feed(text: string, icon: string?)
+	Remotes.Feed:FireAllClients(text, icon or "info")
 end
 
 local function aliveList(r: Round): { Player }
@@ -184,7 +185,7 @@ local function survivalReward(r: Round, player: Player)
 	DataService.reward(player, coins, "for surviving")
 end
 
-local function eliminate(r: Round, player: Player, reason: string)
+local function eliminate(r: Round, player: Player, reason: string, icon: string)
 	if not r.alive[player] then
 		return
 	end
@@ -195,16 +196,17 @@ local function eliminate(r: Round, player: Player, reason: string)
 	local egged = r.lastEgged[player]
 	local shooter = egged and egged.shooter
 	if egged and shooter and shooter.Parent and os.clock() - egged.at <= Config.Rewards.KnockoutWindow then
-		feed(`{shooter.DisplayName} egged {player.DisplayName} to their doom!`)
+		feed(`{shooter.DisplayName} egged {player.DisplayName} to their doom!`, "egg")
+		Remotes.Notify:FireClient(shooter, `KNOCKOUT! {player.DisplayName}`, "knockout", 0)
 		DataService.addStat(shooter, "Knockouts", 1)
 		DataService.reward(shooter, Config.Rewards.Knockout, "knockout")
 	else
-		feed(`{player.DisplayName} {reason}`)
+		feed(`{player.DisplayName} {reason}`, icon)
 	end
 	survivalReward(r, player)
 	if r.mode.roadRage and player.Parent then
 		player:SetAttribute("Driver", true)
-		Remotes.Feed:FireClient(player, "You're a driver now. Run them over!")
+		Remotes.Feed:FireClient(player, "You're a driver now. Run them over!", "angry")
 	end
 end
 
@@ -257,8 +259,8 @@ local function runSidewalkEvents(r: Round, roundStart: number)
 			if r.ended then
 				return
 			end
-			if SidewalkService.shrink(S.ShrinkWarning) then
-				feed("The sidewalks are crumbling!")
+			if SidewalkService.shrink(S.ShrinkWarning, S.MinRows) then
+				feed("The sidewalks are crumbling!", "lightning")
 			end
 		end
 		return
@@ -269,7 +271,7 @@ local function runSidewalkEvents(r: Round, roundStart: number)
 	while not r.ended do
 		-- Drop the side with the most chickens on it, so nobody can camp.
 		local side = busiestSide(r)
-		feed(`Sidewalk {side} is collapsing! Cross the road!`)
+		feed(`Sidewalk {side} is collapsing! Cross the road!`, "lightning")
 		SidewalkService.collapseSide(side, S.CollapseWarning, S.CollapseDuration)
 		if r.ended then
 			return
@@ -293,8 +295,9 @@ local function playersWithCharacters(): { Player }
 end
 
 local function runRound(mode: Modes.Mode): ({ Player }, string)
-	SidewalkService.build(arena)
+	SidewalkService.reset(arena, Config.Map.LaneCount * Config.Map.LaneWidth / 2)
 	EggService.clear()
+	RoundState:SetAttribute("SuddenDeath", false)
 
 	local r: Round = {
 		mode = mode,
@@ -336,7 +339,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 				r.connections,
 				humanoid.Died:Connect(function()
 					if r.alive[player] then
-						eliminate(r, player, "became a pancake")
+						eliminate(r, player, "became a pancake", "skull")
 					end
 				end)
 			)
@@ -347,7 +350,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 		r.connections,
 		Players.PlayerRemoving:Connect(function(player)
 			if r.alive[player] then
-				eliminate(r, player, "flew the coop")
+				eliminate(r, player, "flew the coop", "feather")
 			end
 		end)
 	)
@@ -381,7 +384,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 			if not r.alive[player] or RoundState:GetAttribute("State") ~= "InRound" then
 				return
 			end
-			eliminate(r, player, "didn't make it across")
+			eliminate(r, player, "got flattened by a car", "car")
 			ChickenService.squash(player, Vector3.new(car.dir * car.speed, 0, 0))
 		end,
 	})
@@ -407,14 +410,15 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 		for _, player in aliveList(r) do
 			local root = ChickenService.getRoot(player)
 			if root and root.Position.Y < Config.Map.KillY then
-				eliminate(r, player, "fell off the world")
+				eliminate(r, player, "fell into the clouds", "skull")
 				ChickenService.kill(player)
 			end
 		end
 
 		if not suddenDeathAnnounced and elapsed >= Config.Timing.SuddenDeathAt then
 			suddenDeathAnnounced = true
-			feed("SUDDEN DEATH! Traffic speeds up!")
+			RoundState:SetAttribute("SuddenDeath", true)
+			feed("SUDDEN DEATH! Traffic speeds up!", "fire")
 		end
 
 		local over, w, m = checkWinner(r)
@@ -430,6 +434,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	end
 
 	r.ended = true
+	RoundState:SetAttribute("SuddenDeath", false)
 	TrafficService.stop()
 	EggService.setRules({
 		canShoot = function()
@@ -491,9 +496,8 @@ local function waitForPlayers()
 end
 
 function RoundService.init()
-	arena = MapBuilder.buildArena()
-	MapBuilder.buildLobby()
-	SidewalkService.build(arena)
+	arena = MapBuilder.prepare()
+	SidewalkService.reset(arena, Config.Map.LaneCount * Config.Map.LaneWidth / 2)
 
 	local function makeTeam(side: Side, name: string, color: BrickColor)
 		local team = Instance.new("Team")

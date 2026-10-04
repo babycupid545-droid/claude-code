@@ -10,6 +10,7 @@
 --   ModeId         the mode being played
 --   TrafficParams  JSON TrafficSchedule.Params, or "" when there is no traffic
 --   Message        big centered text (winner, countdown hints)
+--   SuddenDeath    true once traffic speeds up for the end of the round
 -- Player attributes:
 --   Alive          true while a chicken is in the current round
 --   Driver         true while driving in Road Rage
@@ -34,6 +35,7 @@ if RunService:IsServer() then
 	state:SetAttribute("ModeId", "")
 	state:SetAttribute("TrafficParams", "")
 	state:SetAttribute("Message", "")
+	state:SetAttribute("SuddenDeath", false)
 	state.Parent = ReplicatedStorage
 	return state
 end

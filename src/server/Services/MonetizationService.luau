@@ -26,7 +26,7 @@ local function registerProducts()
 		if pack.productId ~= 0 then
 			grants[pack.productId] = function(player)
 				DataService.addCoins(player, pack.coins)
-				Remotes.Notify:FireClient(player, `+{pack.coins} 🪙 Thanks for your support!`)
+				Remotes.Notify:FireClient(player, `+{pack.coins} Thanks for your support!`, "coin", pack.coins)
 			end
 		end
 	end
@@ -35,7 +35,7 @@ local function registerProducts()
 		if productId ~= 0 and item then
 			grants[productId] = function(player)
 				DataService.grant(player, itemId)
-				Remotes.Notify:FireClient(player, `Unlocked {item.name}!`)
+				Remotes.Notify:FireClient(player, `Unlocked {item.name}!`, "unlock", 0)
 			end
 		end
 	end
@@ -85,7 +85,7 @@ function MonetizationService.init()
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
 		if purchased and passId == Config.Monetization.VipGamePassId and passId ~= 0 then
 			DataService.setVip(player, true)
-			Remotes.Notify:FireClient(player, "You're VIP! Double coins from every round.")
+			Remotes.Notify:FireClient(player, "You're VIP! Double coins from every round.", "unlock", 0)
 		end
 	end)
 end

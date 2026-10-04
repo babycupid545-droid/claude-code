@@ -196,7 +196,7 @@ function DataService.reward(player: Player, amount: number, reason: string)
 	end
 	data.Coins += amount
 	DataService.sync(player)
-	Remotes.Notify:FireClient(player, `+{amount} 🪙 {reason}`)
+	Remotes.Notify:FireClient(player, `+{amount} {reason}`, "coin", amount)
 end
 
 function DataService.addCoins(player: Player, amount: number)
@@ -245,13 +245,13 @@ local function onBuy(player: Player, itemId: unknown)
 		return
 	end
 	if data.Coins < item.price then
-		Remotes.Notify:FireClient(player, "Not enough coins!")
+		Remotes.Notify:FireClient(player, "Not enough coins!", "error", 0)
 		return
 	end
 	data.Coins -= item.price
 	data.Owned[itemId] = true
 	DataService.sync(player)
-	Remotes.Notify:FireClient(player, `Unlocked {item.name}!`)
+	Remotes.Notify:FireClient(player, `Unlocked {item.name}!`, "unlock", 0)
 end
 
 local function onEquip(player: Player, itemId: unknown)
@@ -271,7 +271,7 @@ local function onEquip(player: Player, itemId: unknown)
 		elseif #emotes < Config.Emotes.MaxEquipped then
 			table.insert(emotes, itemId)
 		else
-			Remotes.Notify:FireClient(player, `You can equip {Config.Emotes.MaxEquipped} emotes. Unequip one first.`)
+			Remotes.Notify:FireClient(player, `You can equip {Config.Emotes.MaxEquipped} emotes. Unequip one first.`, "error", 0)
 			return
 		end
 	else

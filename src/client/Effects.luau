@@ -11,6 +11,8 @@ local Shared = ReplicatedStorage.Shared
 local Assets = require(Shared.Assets)
 local Cosmetics = require(Shared.Cosmetics)
 
+local Sfx = require(script.Parent.Sfx)
+
 local Effects = {}
 
 local function effectsFolder(): Folder
@@ -81,13 +83,8 @@ local function burst(position: Vector3, colors: { Color3 }?, count: number, size
 	emitter:Emit(count)
 end
 
-local function playSound(name: string, parent: Instance)
-	local sound = Assets.find("Sounds", name)
-	if sound and sound:IsA("Sound") then
-		local s = sound:Clone()
-		s.Parent = parent
-		s:Play()
-	end
+local function playSound(name: string, parent: BasePart)
+	Sfx.playAt(name, parent.Position, { pitchJitter = 0.08 })
 end
 
 -- Plays an art template: emits every disabled ParticleEmitter once (EmitCount attribute,
@@ -238,6 +235,7 @@ function Effects.feathers(position: Vector3)
 		burst(position, { Color3.fromRGB(250, 250, 245) }, 40, 0.9)
 	end
 	playSound("Feathers", anchorPart(position, Vector3.one, 3))
+	playSound("Squash", anchorPart(position, Vector3.one, 3))
 end
 
 -- Win effects ---------------------------------------------------------------------------
@@ -317,7 +315,18 @@ function Effects.winAt(position: Vector3, effectId: string?)
 		local style: (Vector3, { Color3 }?) -> () = WIN_STYLES[item.look.special or "Burst"] or confetti
 		style(position, item.look.colors)
 	end
-	playSound("Win", anchorPart(position, Vector3.one, 5))
+	local style = item.look.special or "Burst"
+	local holder = anchorPart(position, Vector3.one, 5)
+	if style == "Fireworks" or style == "Supernova" then
+		for i = 0, 2 do
+			task.delay(i * 0.5, function()
+				playSound("Firework", holder)
+			end)
+		end
+	elseif style == "Pillar" or style == "Rain" then
+		playSound("Sparkle", holder)
+	end
+	playSound("Confetti", holder)
 end
 
 function Effects.win(celebrations: { { userId: number, effect: string } })

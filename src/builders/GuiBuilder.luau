@@ -126,7 +126,7 @@ local function buildFeedAndToasts(hud: ScreenGui, tpl: Folder)
 	new("Frame", {
 		Name = "Toasts",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 0.72),
+		Position = UDim2.fromScale(0.5, 0.82),
 		Size = UDim2.fromScale(1, 0.22),
 		BackgroundTransparency = 1,
 		Parent = hud,
@@ -154,7 +154,7 @@ local function buildStamina(hud: ScreenGui)
 	local stamina = new("Frame", {
 		Name = "Stamina",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 0.86),
+		Position = UDim2.fromScale(0.5, 0.91),
 		Size = UDim2.fromScale(1, 0.045),
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -202,7 +202,7 @@ local function buildSpectate(hud: ScreenGui)
 		Kit.padding(0.1),
 	})
 	Kit.icon("Icon", "eye", { LayoutOrder = 1, Size = UDim2.fromScale(1, 1.2), Parent = row })
-	Kit.text("Name", "Spectating", { LayoutOrder = 2, Font = T.TitleFont, Size = UDim2.fromScale(0.8, 1), MaxTextSize = 30, Parent = row })
+	Kit.text("Player", "Spectating", { LayoutOrder = 2, Font = T.TitleFont, Size = UDim2.fromScale(0.8, 1), MaxTextSize = 30, Parent = row })
 	Kit.button("Next", T.Blue, nil, "arrowRight", { LayoutOrder = 3, Size = UDim2.fromScale(0.16, 1), Parent = bar })
 end
 
@@ -237,7 +237,7 @@ local function buildBigMoments(hud: ScreenGui)
 	Kit.sunburst("Sunburst", { Size = UDim2.fromScale(1.1, 1.75), Parent = results })
 	Kit.icon("Icon", "crown", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromScale(1, 0.32), Parent = results })
 	Kit.text("Title", "WINNER!", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.32), Size = UDim2.fromScale(1, 0.28), Font = T.TitleFont, TextColor3 = T.Yellow, MaxTextSize = 96, StrokeThickness = 5, Parent = results })
-	Kit.text("Name", "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.6), Size = UDim2.fromScale(1, 0.16), MaxTextSize = 44, Parent = results })
+	Kit.text("Winner", "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.6), Size = UDim2.fromScale(1, 0.16), MaxTextSize = 44, Parent = results })
 	local reward = Kit.pill("Reward", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.8), Size = UDim2.fromScale(0.45, 0.15), Visible = false, Parent = results })
 	local rrow = new("Frame", { Name = "Row", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = reward }, {
 		Kit.list("H", 0.04),
@@ -303,19 +303,19 @@ local function buildVote(hud: ScreenGui, tpl: Folder)
 	}, { Kit.list("H", 0.025) })
 
 	-- One card per mode option.
-	local card = Kit.button("VoteCard", T.Blue, nil, nil, { Size = UDim2.fromScale(0.31, 1) })
+	local card = Kit.button("VoteCard", T.Blue, nil, nil, { Size = UDim2.fromScale(0.31, 1) }, 0.12)
 	card.Parent = tpl
 	local face = card:FindFirstChild("Face") :: Frame
 	local content = face:FindFirstChild("Content") :: Frame
 	content:ClearAllChildren()
 	Kit.sunburst("Burst", { Size = UDim2.fromScale(1.3, 1.3), Position = UDim2.fromScale(0.5, 0.3), ImageTransparency = 0.75, ZIndex = 2, Parent = content })
 	Kit.icon("Icon", "chickenRun", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.04), Size = UDim2.fromScale(1, 0.36), ZIndex = 3, Parent = content })
-	Kit.text("Name", "SOLO", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.4), Size = UDim2.fromScale(0.94, 0.17), Font = T.TitleFont, MaxTextSize = 34, ZIndex = 3, Parent = content })
-	Kit.text("Desc", "Description", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.57), Size = UDim2.fromScale(0.9, 0.2), MaxTextSize = 18, TextColor3 = rgb(255, 250, 235), ZIndex = 3, Parent = content })
+	Kit.text("ModeName", "SOLO", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.4), Size = UDim2.fromScale(0.94, 0.17), Font = T.TitleFont, MaxTextSize = 34, ZIndex = 3, Parent = content })
+	Kit.text("Desc", "Description", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.565), Size = UDim2.fromScale(0.92, 0.215), MaxTextSize = 18, TextColor3 = rgb(255, 250, 235), ZIndex = 3, Parent = content })
 	local barTrack = new("Frame", {
 		Name = "Bar",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.5, 0.8),
+		Position = UDim2.fromScale(0.5, 0.815),
 		Size = UDim2.fromScale(0.86, 0.12),
 		BackgroundColor3 = T.PillBg,
 		ZIndex = 3,
@@ -454,7 +454,7 @@ local function buildShop(parent: Instance)
 	})
 	Kit.icon("Icon", "coin", { LayoutOrder = 1, Size = UDim2.fromScale(1, 1.3), Parent = crow })
 	Kit.text("Amount", "0", { LayoutOrder = 2, Font = T.TitleFont, Size = UDim2.fromScale(0.62, 1), MaxTextSize = 32, Parent = crow })
-	Kit.button("Close", T.Red, nil, "close", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.fromScale(0.12, 1.25), SizeConstraint = Enum.SizeConstraint.RelativeYY, Parent = header })
+	Kit.button("Close", T.Red, nil, "close", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.fromScale(1.3, 1.3), SizeConstraint = Enum.SizeConstraint.RelativeYY, Parent = header })
 
 	local tabs = new("Frame", {
 		Name = "Tabs",
@@ -498,7 +498,7 @@ local function buildShop(parent: Instance)
 	}, {
 		Kit.corner(16),
 		Kit.stroke(3),
-		new("UIGradient", { Name = "Rarity", Rotation = 90, Color = ColorSequence.new(rgb(120, 120, 140), rgb(70, 70, 90)) }),
+		new("UIGradient", { Name = "RarityGradient", Rotation = 90, Color = ColorSequence.new(rgb(120, 120, 140), rgb(70, 70, 90)) }),
 		new("UIScale", { Name = "AnimScale" }),
 	})
 	Kit.icon("Glow", "glow", {
@@ -531,7 +531,7 @@ local function buildShop(parent: Instance)
 		ZIndex = 3,
 		Parent = card,
 	})
-	Kit.text("Name", "Item", { Position = UDim2.fromScale(0.05, 0.57), Size = UDim2.fromScale(0.9, 0.12), Font = T.TitleFont, MaxTextSize = 22, ZIndex = 3, Parent = card })
+	Kit.text("ItemName", "Item", { Position = UDim2.fromScale(0.05, 0.57), Size = UDim2.fromScale(0.9, 0.12), Font = T.TitleFont, MaxTextSize = 22, ZIndex = 3, Parent = card })
 	Kit.text("Rarity", "COMMON", { Position = UDim2.fromScale(0.05, 0.69), Size = UDim2.fromScale(0.9, 0.08), MaxTextSize = 16, ZIndex = 3, Parent = card })
 	Kit.button("Action", T.Green, "EQUIP", "coin", {
 		AnchorPoint = Vector2.new(0.5, 1),

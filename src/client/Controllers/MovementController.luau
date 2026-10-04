@@ -12,7 +12,9 @@ local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 
+local CameraFx = require(script.Parent.Parent.CameraFx)
 local Effects = require(script.Parent.Parent.Effects)
+local Sfx = require(script.Parent.Parent.Sfx)
 
 local MovementController = {}
 
@@ -24,6 +26,7 @@ local root: BasePart? = nil
 local stamina = C.GlideStamina
 local gliding = false
 local glideTrack: AnimationTrack? = nil
+local windLoop: Sound? = nil
 
 local function jumpHeld(h: Humanoid): boolean
 	return h.Jump
@@ -36,6 +39,18 @@ local function setGliding(on: boolean)
 		return
 	end
 	gliding = on
+	-- Wind while gliding, plus a slightly wider view for a sense of speed.
+	if on then
+		Sfx.play("Glide", { pitchJitter = 0.1 })
+		windLoop = Sfx.loop("Wind", { volume = 0.8 })
+		CameraFx.setFovTarget(8)
+	else
+		if windLoop then
+			windLoop:Destroy()
+			windLoop = nil
+		end
+		CameraFx.setFovTarget(0)
+	end
 	if glideTrack then
 		if on then
 			glideTrack:Play(0.15)
@@ -55,6 +70,13 @@ local function onCharacter(character: Model)
 	stamina = C.GlideStamina
 	gliding = false
 	glideTrack = nil
+	h.StateChanged:Connect(function(_, new)
+		if new == Enum.HumanoidStateType.Jumping then
+			Sfx.play("Jump", { pitchJitter = 0.08 })
+		elseif new == Enum.HumanoidStateType.Landed then
+			Sfx.play("Land", { pitchJitter = 0.1 })
+		end
+	end)
 	local animation = Assets.find("Animations", "Glide")
 	local animator = h:FindFirstChildOfClass("Animator")
 	if animation and animation:IsA("Animation") and animator then
@@ -94,6 +116,9 @@ local function applyKnockback(velocity: Vector3)
 	if not r or typeof(velocity) ~= "Vector3" then
 		return
 	end
+	Sfx.play("Boing", { pitchJitter = 0.1 })
+	Sfx.play("EggHit")
+	CameraFx.shake(0.45)
 	-- A LinearVelocity briefly overrides the humanoid's own movement so the push lands.
 	local attachment = Instance.new("Attachment")
 	attachment.Parent = r
@@ -122,6 +147,7 @@ local function onSplat(userId: number, position: Vector3, fling: Vector3)
 	if not character then
 		return
 	end
+	CameraFx.shake(0.9)
 	-- Our client still owns the ragdoll for a moment, so send it flying.
 	for _, d in character:GetDescendants() do
 		if d:IsA("BasePart") then
