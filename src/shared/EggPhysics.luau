@@ -21,12 +21,14 @@ function EggPhysics.buttOrigin(root: BasePart): Vector3
 end
 
 -- Moves an egg from t0 to t1 with a sphere cast so fast eggs can't skip through targets.
+-- `radius` defaults to Config.Egg.Radius (mega eggs are bigger).
 function EggPhysics.step(
 	origin: Vector3,
 	velocity: Vector3,
 	t0: number,
 	t1: number,
-	params: RaycastParams
+	params: RaycastParams,
+	radius: number?
 ): (Vector3, RaycastResult?)
 	local from = EggPhysics.position(origin, velocity, t0)
 	local to = EggPhysics.position(origin, velocity, t1)
@@ -34,7 +36,7 @@ function EggPhysics.step(
 	if delta.Magnitude < 1e-3 then
 		return to, nil
 	end
-	local result = workspace:Spherecast(from, Config.Egg.Radius, delta, params)
+	local result = workspace:Spherecast(from, radius or Config.Egg.Radius, delta, params)
 	return to, result
 end
 

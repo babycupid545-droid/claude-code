@@ -21,6 +21,7 @@
 --   Driver         true while driving in Road Rage
 --   Team           "A" | "B" | nil
 --   Afk            true while the player sits out rounds (stays in the lobby)
+--   Powerup, PowerupEndsAt, SpecialEgg, SpecialAmmo, StuckUntil, Bounty: see Shared/Powerups
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")

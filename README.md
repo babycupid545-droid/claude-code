@@ -32,8 +32,11 @@ The code lives in this repo and is synced into Studio with [Rojo](https://rojo.s
   paste the ids into `Config.Monetization` in `src/shared/Config.luau`:
   - 3 **Developer Products** for the egg packs (500 / 1500 / 5000 golden eggs),
   - 5 **Developer Products** for the Robux-only items (Rainbow, DiamondEgg, LoveTap, Supernova, Flex),
-  - 1 **Game Pass** for VIP (double golden eggs).
+  - 1 **Game Pass** for VIP (double golden eggs),
+  - 1 **Game Pass** for the season pass premium track (`SeasonPassId`; make a new one each season).
   Anything left at `0` shows as "Coming soon" in the shop.
+- Levels, titles, daily quests and the season pass are tuned in `Config.Progress`, `Config.Quests`
+  and `Config.Season` (change `Season.Id` and `EndsAt` to start a new season).
 
 ## Controls
 
@@ -65,6 +68,7 @@ tests/         Plain-Luau tests for code that doesn't need Roblox
 
 ```
 luau tests/TrafficSchedule.spec.luau
+luau tests/Progression.spec.luau
 rojo sourcemap default.project.json -o sourcemap.json
 luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 ```

@@ -252,8 +252,13 @@ local function refreshShop()
 		end
 		return
 	end
-	for i, item in Cosmetics.inSlot(currentTab :: Cosmetics.Slot) do
-		itemCard(item, i)
+	local order = 0
+	for _, item in Cosmetics.inSlot(currentTab :: Cosmetics.Slot) do
+		-- Season pass rewards aren't for sale; they only show up once you own them.
+		if not item.season or ClientData.owns(item.id) then
+			order += 1
+			itemCard(item, order)
+		end
 	end
 end
 

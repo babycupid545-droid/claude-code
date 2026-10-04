@@ -1,6 +1,7 @@
 --!strict
 -- Chicken movement that has to feel instant, so it runs on the client (which owns its
 -- character's physics): gliding, egg knockback, and being flung by a car.
+-- Power-ups: Extra Feather doubles (and refills) glide stamina; a sticky egg grounds you.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,6 +34,16 @@ local activePush: LinearVelocity? = nil
 local COYOTE_TIME = 0.12
 local lastGrounded = 0
 local jumpedSinceGrounded = false
+
+local function maxStamina(): number
+	local feather = player:GetAttribute("Powerup") == "Feather"
+	return C.GlideStamina * (if feather then Config.Powerups.FeatherGlideMult else 1)
+end
+
+local function isStuck(): boolean
+	local stuck = player:GetAttribute("StuckUntil")
+	return type(stuck) == "number" and stuck > workspace:GetServerTimeNow()
+end
 
 local function jumpHeld(h: Humanoid): boolean
 	return h.Jump
@@ -101,19 +112,21 @@ local function step(dt: number)
 		setGliding(false)
 		return
 	end
+	local max = maxStamina()
+	stamina = math.min(stamina, max)
 	local grounded = h.FloorMaterial ~= Enum.Material.Air
 	if grounded then
 		lastGrounded = os.clock()
 		if h:GetState() ~= Enum.HumanoidStateType.Jumping then
 			jumpedSinceGrounded = false
 		end
-		stamina = math.min(C.GlideStamina, stamina + dt * C.GlideRecharge)
+		stamina = math.min(max, stamina + dt * C.GlideRecharge)
 		setGliding(false)
 		return
 	end
 
 	local velocity = r.AssemblyLinearVelocity
-	if velocity.Y < 0 and stamina > 0 and jumpHeld(h) then
+	if velocity.Y < 0 and stamina > 0 and jumpHeld(h) and not isStuck() then
 		setGliding(true)
 		-- Feather Frenzy event: unlimited glide.
 		if RoundState:GetAttribute("Event") ~= "FeatherFrenzy" then
@@ -207,7 +220,7 @@ end
 
 -- 0..1, for the stamina bar.
 function MovementController.getStamina(): number
-	return stamina / C.GlideStamina
+	return stamina / maxStamina()
 end
 
 function MovementController.isGliding(): boolean
@@ -223,6 +236,12 @@ function MovementController.start()
 	UserInputService.JumpRequest:Connect(onJumpRequest)
 	Remotes.Knockback.OnClientEvent:Connect(applyKnockback)
 	Remotes.ChickenSplat.OnClientEvent:Connect(onSplat)
+	-- Extra Feather: a full (double) tank right away.
+	player:GetAttributeChangedSignal("Powerup"):Connect(function()
+		if player:GetAttribute("Powerup") == "Feather" then
+			stamina = maxStamina()
+		end
+	end)
 end
 
 return MovementController

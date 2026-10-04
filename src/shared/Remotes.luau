@@ -13,9 +13,12 @@ local NAMES = {
 	"EquipItem", -- (itemId: string) equip (emotes: toggle in/out of the emote wheel)
 	"Emote", -- (itemId: string)
 	"SetAfk", -- (afk: boolean) go AFK (sit out the next rounds) or come back
+	"EquipTitle", -- (titleId: string) wear an unlocked title ("" = none)
+	"RerollQuest", -- (index: number) swap a daily quest (free once a day)
+	"ClaimTier", -- (track: "free" | "premium", tier: number) claim a season pass reward
 	-- server -> client
-	"EggFired", -- (eggId: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number, eggSkin: string)
-	"EggHit", -- (eggId: string, position: Vector3, hitEffect: string)
+	"EggFired", -- (eggId: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number, eggSkin: string, mega: boolean, special: string)
+	"EggHit", -- (eggId: string, position: Vector3, hitEffect: string, special: string) special "Bounce" = ricochet
 	"Knockback", -- (velocity: Vector3)
 	"RageCar", -- (car: TrafficSchedule.Car)
 	"ChickenSplat", -- (userId: number, position: Vector3, velocity: Vector3)
@@ -27,6 +30,9 @@ local NAMES = {
 	"EggPickup", -- (position: Vector3, userId: number) a golden egg was collected
 	"EggShot", -- (userId: number) someone fired an egg (for the shooting animation)
 	"Notify", -- (text: string, kind: "coin" | "error" | "unlock" | "knockout" | "info", amount: number)
+	"XpGain", -- (amount: number) the local player earned XP
+	"LevelUp", -- (level: number, coins: number, titles: { string }) the local player levelled up
+	"PowerupFx", -- (fx: "Pickup" | "ShieldPop" | "Steal" | "Bounty" | "BountyClaimed", position: Vector3, userId: number, detail: string) detail = power-up id or egg amount
 }
 
 local folder: Instance

@@ -5,7 +5,7 @@ way the client scripts would, dumps the instance tree as JSON and lays it out / 
 a small reimplementation of Roblox's UI layout rules.
 
 Usage: python3 tools/preview/render_gui.py <scenario> <out.png> --luau <luau> --fonts <dir>
-       scenarios: vote, round, go, intro, results, shop, emotes, afk, driver
+       scenarios: vote, round, go, intro, results, shop, emotes, afk, driver, level, quests, pass, levelup
 """
 
 import json
@@ -34,8 +34,8 @@ SS = 2  # supersample for smoother edges
 
 MODULES = ["src/shared/Config.luau", "src/shared/AssetIds.luau", "src/shared/UiSprites.luau",
            "src/shared/FarmSprites.luau", "src/shared/IconSprites.luau", "src/shared/SpriteSheets.luau",
-           "src/shared/Modes.luau", "src/shared/Cosmetics.luau",
-           "src/builders/GuiKit.luau", "src/builders/GuiBuilder.luau"]
+           "src/shared/Modes.luau", "src/shared/Cosmetics.luau", "src/shared/Progression.luau",
+           "src/builders/GuiKit.luau", "src/builders/ProgressGui.luau", "src/builders/GuiBuilder.luau"]
 
 SCENARIO = r'''
 local scenario = "%s"
@@ -134,6 +134,19 @@ elseif scenario == "round" then
 	board("RUSH HOUR", "5 OF 6 LEFT", players, 6)
 	H.Stamina.Visible = true
 	H.Stamina.Track.Fill.Size = UDim2.fromScale(0.65, 1)
+	H.EggCharge.Visible = true
+	H.EggCharge.Track.Fill.Size = UDim2.fromScale(0.4, 1)
+	local function chip(c, title, sprite, value, fill, color)
+		c.Visible = true
+		c.Inner.Title.Text = title
+		c.Inner.Title.TextColor3 = color
+		setSprite(c.Inner.Icon, sprite)
+		c.Inner.Value.Text = value
+		c.Inner.Bar.Fill.Size = UDim2.fromScale(fill, 1)
+		c.Inner.Bar.Fill.BackgroundColor3 = color
+	end
+	chip(H.Powerups.Power, "SPEED BOOTS", "lightning", "4s", 0.66, Color3.fromRGB(255, 214, 64))
+	chip(H.Powerups.Special, "EXPLOSIVE EGGS", "boom", "x2", 0.66, Color3.fromRGB(255, 90, 50))
 	feed("Nugget got flattened by a car", "car", 3)
 	feed("Henrietta egged Drumstick to their doom!", "egg", 2)
 	feed("SPEED DEMONS: Traffic goes much faster!", "lightning", 1)
@@ -219,6 +232,172 @@ elseif scenario == "driver" then
 	objective("ROAD RAGE!", "Pick a lane and send cars at the chickens.", Color3.fromRGB(235, 80, 70), "angry")
 	H.Buttons.Spectate.Visible = false
 end
+-- Progress window (levels, quests, season pass): filled in the way ProgressUI does it.
+if scenario == "level" or scenario == "quests" or scenario == "pass" or scenario == "levelup" then
+	local Config = mockRequire(shared:FindFirstChild("Config"))
+	local Progression = mockRequire(shared:FindFirstChild("Progression"))
+	local progressGui = root.Progress
+	local G = progressGui.Root
+	local ORANGE, GREEN, GREY, BLUE, PINK = Color3.fromRGB(255, 156, 46), Color3.fromRGB(110, 200, 84), Color3.fromRGB(150, 138, 126), Color3.fromRGB(76, 164, 236), Color3.fromRGB(255, 110, 170)
+	local INK, INK_SOFT = Color3.fromRGB(74, 46, 28), Color3.fromRGB(140, 104, 76)
+	local function setIcon(b, sprite)
+		local icon = b.Border.Inner.Content:FindFirstChild("Icon")
+		if icon then icon.Visible = sprite ~= ""; if sprite ~= "" then setSprite(icon, sprite) end end
+	end
+	H.Buttons.Pass.Level.Label.Text = "12"
+	objective("WAITING FOR CHICKENS", "The game starts when enough chickens are here.", nil, "chick")
+	board("TOP CHICKENS", "6 IN LOBBY", players)
+	local function openTab(tab)
+		G.Dim.Visible = true
+		G.Panel.Visible = true
+		local inner = G.Panel.Inner
+		inner.Header.Coins.Label.Text = "1,250"
+		for _, t in { "Level", "Quests", "Pass" } do
+			inner.Pages[t].Visible = t == tab
+			if t == tab then setButton(inner.Tabs[t], nil, ORANGE) end
+		end
+		inner.Tabs.Pass.Alert.Visible = true
+		return inner.Pages[tab]
+	end
+	if scenario == "level" then
+		local pg = openTab("Level")
+		local s = pg.Summary.Inner
+		s.Number.Text = "12"
+		s.LevelText.Text = "LEVEL 12"
+		s.TitleText.Text = "Egg Slinger"
+		s.XpBar.Fill.Size = UDim2.fromScale(140 / 320, 1)
+		s.XpBar.Text.Text = "140 / 320 XP"
+		s.Next.Label.Text = "+69 eggs at level 13"
+		local stats = { Wins = 23, Knockouts = 87, Crossings = 164, Rounds = 141 }
+		for name, v in stats do s.Stats[name].Value.Text = tostring(v) end
+		local count = 0
+		for i, def in Config.Progress.Titles do
+			local row = tpl(progressGui, "TitleRow")
+			row.LayoutOrder = i
+			local open = Progression.titleUnlocked(def, 12, stats, {})
+			local equipped = def.id == "EggSlinger"
+			row.TitleName.Text = def.name
+			row.TitleName.TextColor3 = if open then INK else INK_SOFT
+			local req = Progression.titleRequirement(def)
+			if not open and def.stat then req = math.min(stats[def.stat], def.goal) .. " / " .. req end
+			row.Requirement.Text = req
+			row.Icon.ImageTransparency = if open then 0 else 0.55
+			row.Lock.Visible = not open
+			row.Action.Visible = open
+			row.BackgroundColor3 = if equipped then Color3.fromRGB(226, 246, 206) elseif open then Color3.fromRGB(244, 230, 204) else Color3.fromRGB(236, 226, 210)
+			if equipped then row.UIStroke.Color = GREEN; row.UIStroke.Transparency = 0; row.UIStroke.Thickness = 2.5 end
+			if open then
+				count += 1
+				setButton(row.Action, if equipped then "WORN" else "WEAR", if equipped then GREY else GREEN)
+			end
+			row.Parent = pg.TitleList
+		end
+		pg.TitlesCount.Text = count .. " / " .. #Config.Progress.Titles .. " UNLOCKED"
+	elseif scenario == "quests" then
+		local pg = openTab("Quests")
+		pg.Top.Timer.Text = "NEW QUESTS IN 7h 42m"
+		pg.Top.Rerolls.Label.Text = "1 FREE SWAP TODAY"
+		local states = { { "Knockouts5", 3, false }, { "Win1", 1, true }, { "Glide20", 6, false } }
+		for i, st in states do
+			local def = Progression.findQuest(Config.Quests.Pool, st[1])
+			local card = tpl(progressGui, "QuestCard")
+			local inner = card.Inner
+			card.LayoutOrder = i
+			local color = if st[3] then GREEN else ORANGE
+			inner.Band.BackgroundColor3 = color
+			inner.Bar.Fill.BackgroundColor3 = color
+			setSprite(inner.Icon, def.icon)
+			inner.QuestName.Text = def.text
+			inner.Bar.Fill.Size = UDim2.fromScale(math.max(0.03, st[2] / def.goal), 1)
+			inner.Bar.Text.Text = if st[3] then "COMPLETE!" else st[2] .. " / " .. def.goal
+			inner.Rewards.Coins.Label.Text = "+" .. def.coins
+			inner.Rewards.Xp.Label.Text = "+" .. def.xp .. " XP"
+			card.Done.Visible = st[3]
+			if st[3] then
+				setButton(inner.Action, "REWARD COLLECTED", GREY)
+			else
+				setButton(inner.Action, "SWAP QUEST", BLUE)
+				setIcon(inner.Action, "")
+			end
+			card.Parent = pg.Cards
+		end
+	elseif scenario == "pass" then
+		local pg = openTab("Pass")
+		local S = Config.Season
+		local b = pg.Season.Inner
+		b.SeasonLabel.Text = "SEASON " .. S.Number
+		b.SeasonName.Text = string.upper(S.Name)
+		b.Timer.Label.Text = "Ends in 57d 11h"
+		local xp = 7 * 300 + 120
+		local tier, into, need = Progression.tierInfo(xp, S.XpPerTier, S.Tiers)
+		b.Tier.Text = "TIER " .. tier
+		b.TierXp.Text = into .. " / " .. need .. " XP"
+		b.TierBar.Fill.Size = UDim2.fromScale(into / need, 1)
+		b.NextTier.Text = "Next tier: +250 eggs"
+		setButton(b.Premium, "R$ 399", PINK)
+		local claimed = { F2 = true, F4 = true }
+		local track = pg.TrackArea.Track
+		track.CanvasPosition = Vector2.new(2 * 112, 0)
+		local function cell(c, reward, reached, isClaimed, locked)
+			c.Claim.Visible = false
+			if not reward then
+				c.BackgroundTransparency = 0.85
+				c.UIStroke.Transparency = 0.8
+				c.Icon.Visible = false
+				c.Glow.Visible = false
+				c.Label.Text = ""
+				return
+			end
+			local sprite, label, tint = "eggCoin", "", Color3.new(1, 1, 1)
+			if reward.coins then
+				label = "+" .. reward.coins
+			elseif reward.item then
+				local item = Cosmetics.get(reward.item)
+				local slots = { ChickenSkin = "chicken", EggSkin = "egg", HitEffect = "boom", WinEffect = "trophy", Emote = "emote" }
+				sprite = slots[item.slot]
+				label = item.name
+				if item.look.colors then tint = item.look.colors[1]:Lerp(Color3.new(1, 1, 1), 0.35) end
+			else
+				sprite = "rosette"
+				label = "Title"
+			end
+			setSprite(c.Icon, sprite)
+			c.Icon.ImageColor3 = tint
+			c.Glow.Visible = reward.coins == nil
+			c.Label.Text = label
+			c.Icon.ImageTransparency = if isClaimed then 0.5 else 0
+			c.Label.TextColor3 = if isClaimed or not reached or locked then INK_SOFT else INK
+			c.Check.Visible = isClaimed
+			c.Lock.Visible = not isClaimed and (not reached or locked)
+			if reached and not isClaimed and not locked then
+				c.Claim.Visible = true
+			end
+		end
+		for t = 1, S.Tiers do
+			local col = tpl(progressGui, "TierColumn")
+			col.LayoutOrder = t
+			col.Head.Num.Text = tostring(t)
+			local reached = t <= tier
+			col.Head.BackgroundColor3 = if reached then ORANGE else Color3.fromRGB(44, 29, 20)
+			local fill = if reached then 1 elseif t == tier + 1 then into / need else 0
+			col.Line.Fill.Size = UDim2.fromScale(fill, 1)
+			col.Line.Fill.Visible = fill > 0
+			cell(col.Free, S.Free[t], reached, claimed["F" .. t] == true, false)
+			cell(col.Premium, S.Premium[t], reached, false, true)
+			col.Parent = track
+		end
+	elseif scenario == "levelup" then
+		local L = G.LevelUp
+		L.Visible = true
+		L.Number.Text = "12"
+		L.Card.Inner.Sub.Text = "New title: Egg Slinger!"
+		L.Card.Inner.Reward.Label.Text = "+66"
+		H.RoundCard.Inner.Title.Text = "RUN!"
+		H.Stats.Inner.Row.Time.Label.Text = "1:42"
+		H.Stats.Inner.Row.Alive.Label.Text = "4/6"
+		toast("+25 eggs for the knockout", "eggCoin", Color3.fromRGB(255, 204, 64), 1)
+	end
+end
 print("JSON" .. dumpTree(root))
 '''
 
@@ -266,8 +445,8 @@ def nine_slice(src, center, w, h, scale):
 def run_luau(scenario, luau):
     parts = [open(os.path.join(ROOT, "tools/preview/mock.luau")).read()]
     parts.append('local shared = service("ReplicatedStorage"):FindFirstChild("Shared")')
-    parts.append('for _, n in { "Modes", "Cosmetics", "FarmSprites", "IconSprites", "SpriteSheets" } do moduleInst(n, "./src/shared/" .. n .. ".luau").Parent = shared end')
-    parts.append('for _, n in { "GuiKit", "GuiBuilder" } do moduleInst(n, "./src/builders/" .. n .. ".luau").Parent = builders end')
+    parts.append('for _, n in { "Modes", "Cosmetics", "Progression", "FarmSprites", "IconSprites", "SpriteSheets" } do moduleInst(n, "./src/shared/" .. n .. ".luau").Parent = shared end')
+    parts.append('for _, n in { "GuiKit", "ProgressGui", "GuiBuilder" } do moduleInst(n, "./src/builders/" .. n .. ".luau").Parent = builders end')
     for rel in MODULES:
         src = open(os.path.join(ROOT, rel)).read()
         src = re.sub(r"^export type", "type", src, flags=re.M).replace("--!strict", "")
@@ -422,6 +601,16 @@ def layout(n, x, y, w, h, out):
         place(c, px, py, cw2, ch2, anim_scale(c), out)
 
 
+CLIP = {}  # id(node) -> (x0, y0, x1, y1) it is clipped to by an ancestor
+CLIP_STACK = [None]
+
+
+def intersect(a, b):
+    if a is None:
+        return b
+    return (max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]))
+
+
 def place(n, x, y, w, h, scale, out):
     if not P(n, "Visible", True):
         return
@@ -430,8 +619,18 @@ def place(n, x, y, w, h, scale, out):
         w, h = w * scale, h * scale
         x, y = mx - w / 2, my - h / 2
     out.append((n, x, y, w, h))
+    if CLIP_STACK[-1] is not None:
+        CLIP[id(n)] = CLIP_STACK[-1]
     start = len(out)
-    layout(n, x, y, w, h, out)
+    # ScrollingFrames (and ClipsDescendants frames) clip their contents; scrolling shifts them.
+    scrolling = P(n, "ClassName") == "ScrollingFrame"
+    clips = scrolling or P(n, "ClipsDescendants", False)
+    if clips:
+        CLIP_STACK.append(intersect(CLIP_STACK[-1], (x, y, x + w, y + h)))
+    ox, oy = P(n, "CanvasPosition", {"v2": [0, 0]})["v2"] if scrolling else (0, 0)
+    layout(n, x - ox, y - oy, w, h, out)
+    if clips:
+        CLIP_STACK.pop()
     # Children draw above their parent; siblings by ZIndex (stable).
     sub = out[start:]
     del out[start:]
@@ -498,6 +697,10 @@ def draw_node(canvas, n, x, y, w, h):
         th = P(stroke, "Thickness", 1) * SS
         col = tuple(int(c * 255) for c in P(stroke, "Color", {"c3": [0, 0, 0]})["c3"])
         m = rounded_mask(Wd + 2 * th, Ht + 2 * th, radius + th)
+        # Only the ring: the inside shows through translucent backgrounds, as in Roblox.
+        hole = Image.new("L", m.size, 0)
+        hole.paste(rounded_mask(Wd, Ht, radius), (int(th), int(th)))
+        m = Image.fromarray(np.clip(np.array(m, dtype=np.int16) - np.array(hole, dtype=np.int16), 0, 255).astype(np.uint8))
         m = m.point(lambda a: int(a * (1 - P(stroke, "Transparency", 0))))
         layer = Image.new("RGBA", canvas.size)
         layer.paste(Image.new("RGBA", m.size, col + (255,)), (int(X - th), int(Y - th)), m)
@@ -623,7 +826,22 @@ def render(tree, scenario, out):
             continue
         layout(screen, 0, 0, W, H, rects)
     for n, x, y, w, h in rects:
-        draw_node(canvas, n, x, y, w, h)
+        clip = CLIP.get(id(n))
+        if clip is None:
+            draw_node(canvas, n, x, y, w, h)
+            continue
+        x0, y0, x1, y1 = clip
+        if x + w <= x0 or x >= x1 or y + h <= y0 or y >= y1:
+            continue
+        m = 4  # strokes reach a little outside
+        if x - m >= x0 and y - m >= y0 and x + w + m <= x1 and y + h + m <= y1:
+            draw_node(canvas, n, x, y, w, h)
+            continue
+        layer = Image.new("RGBA", canvas.size)
+        draw_node(layer, n, x, y, w, h)
+        box = (max(0, int(x0 * SS)), max(0, int(y0 * SS)), min(canvas.width, int(x1 * SS)), min(canvas.height, int(y1 * SS)))
+        if box[2] > box[0] and box[3] > box[1]:
+            canvas.alpha_composite(layer.crop(box), (box[0], box[1]))
     canvas.resize((W, H), Image.LANCZOS).convert("RGB").save(out)
 
 

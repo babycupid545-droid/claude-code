@@ -111,6 +111,14 @@ Tick these off and send back anything that's wrong, plus any red text from Outpu
 - [ ] Egg skins, hit effects and win effects show up in game.
 - [ ] Emotes play with keys 1–4 or the Emotes button.
 
+**Levels, quests and season pass** (PASS button, bottom left)
+- [ ] "+XP" pops above the PASS button after crossings, knockouts and at round end.
+- [ ] Levelling up shows the LEVEL UP card, golden sparkles on your chicken and pays eggs.
+- [ ] Other players see a small level + title plate above your chicken; WEAR a title in LEVEL.
+- [ ] QUESTS shows 3 quests with progress; finishing one pays out with a toast; SWAP works once a day.
+- [ ] PASS: tiers fill with XP, CLAIM gives the reward, premium cells stay locked without the pass.
+- [ ] Claimed season items appear in the shop (and can be equipped); unclaimed ones don't.
+
 **Phone (Studio: Test tab → Device → pick a phone)**
 - [ ] The egg button appears in a round and shoots.
 - [ ] Holding the jump button glides.

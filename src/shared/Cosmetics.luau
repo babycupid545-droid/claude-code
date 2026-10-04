@@ -28,6 +28,7 @@ export type Item = {
 	price: number?, -- coins; nil when not sold for coins
 	robux: boolean?, -- sold for Robux (Config.Monetization.ItemProducts)
 	default: boolean?, -- everyone owns it from the start
+	season: boolean?, -- a season pass reward (Config.Season): never sold, only shown once owned
 	look: Look,
 }
 
@@ -119,6 +120,26 @@ local items: { Item } = {
 		look = { special = "Dance", text = "♪ ♫ ♪" } },
 	{ id = "Flex", slot = "Emote", name = "Flex", rarity = "Exclusive", robux = true,
 		look = { special = "Text", text = "💪 TOO EASY 💪", sparkles = true } },
+
+	-- Season 1 pass rewards (Config.Season). No price: they can't be bought. ------------------
+	{ id = "ConeEgg", slot = "EggSkin", name = "Traffic Cone", rarity = "Rare", season = true,
+		look = { colors = { Color3.fromRGB(255, 120, 30), WHITE } } },
+	{ id = "Honk", slot = "Emote", name = "Honk Honk", rarity = "Rare", season = true,
+		look = { special = "Hop", text = "HONK HONK!" } },
+	{ id = "HiVis", slot = "ChickenSkin", name = "Crossing Guard", rarity = "Epic", season = true,
+		look = { colors = { Color3.fromRGB(210, 255, 40), Color3.fromRGB(255, 140, 20) }, comb = RED, beak = ORANGE, material = Enum.Material.Neon } },
+	{ id = "TireSmoke", slot = "HitEffect", name = "Tire Smoke", rarity = "Rare", season = true,
+		look = { colors = { Color3.fromRGB(90, 90, 96), Color3.fromRGB(200, 200, 205) }, count = 32 } },
+	{ id = "HubcapEgg", slot = "EggSkin", name = "Hubcap", rarity = "Epic", season = true,
+		look = { colors = { Color3.fromRGB(200, 205, 215) }, material = Enum.Material.DiamondPlate, trail = Color3.fromRGB(220, 230, 255) } },
+	{ id = "Checkered", slot = "WinEffect", name = "Checkered Flag", rarity = "Epic", season = true,
+		look = { colors = { Color3.fromRGB(25, 25, 25), WHITE }, special = "Burst" } },
+	{ id = "VictoryLap", slot = "Emote", name = "Victory Lap", rarity = "Epic", season = true,
+		look = { special = "Spin", text = "VICTORY LAP!", sparkles = true } },
+	{ id = "Headlights", slot = "HitEffect", name = "Headlights", rarity = "Legendary", season = true,
+		look = { colors = { Color3.fromRGB(255, 250, 200), Color3.fromRGB(255, 220, 90) }, count = 34, special = "Glow" } },
+	{ id = "RoadKing", slot = "ChickenSkin", name = "Road King", rarity = "Legendary", season = true,
+		look = { colors = { Color3.fromRGB(30, 30, 34), Color3.fromRGB(245, 195, 50) }, comb = Color3.fromRGB(245, 195, 50), beak = Color3.fromRGB(245, 195, 50), material = Enum.Material.Foil, sparkles = true } },
 }
 
 local SLOTS: { Slot } = { "ChickenSkin", "EggSkin", "HitEffect", "WinEffect", "Emote" }

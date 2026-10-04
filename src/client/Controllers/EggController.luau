@@ -18,6 +18,7 @@ local ClientData = require(script.Parent.Parent.ClientData)
 local Effects = require(script.Parent.Parent.Effects)
 local Sfx = require(script.Parent.Parent.Sfx)
 local ChickenAnimator = require(script.Parent.ChickenAnimator)
+local PowerupFx = require(script.Parent.PowerupFx)
 
 local EggController = {}
 
@@ -30,6 +31,7 @@ type VisualEgg = {
 	velocity: Vector3,
 	t: number,
 	params: RaycastParams,
+	radius: number,
 }
 
 local eggs: { [string]: VisualEgg } = {}
@@ -49,7 +51,16 @@ local function placeEgg(egg: VisualEgg, position: Vector3)
 	end
 end
 
-local function spawnVisual(id: string, shooter: Model?, origin: Vector3, velocity: Vector3, startT: number, skin: string?)
+local function spawnVisual(
+	id: string,
+	shooter: Model?,
+	origin: Vector3,
+	velocity: Vector3,
+	startT: number,
+	skin: string?,
+	mega: boolean?,
+	special: string?
+)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local exclude: { Instance } = { folder }
@@ -68,7 +79,9 @@ local function spawnVisual(id: string, shooter: Model?, origin: Vector3, velocit
 		velocity = velocity,
 		t = math.max(0, startT),
 		params = params,
+		radius = Config.Egg.Radius * (if mega then Config.Powerups.MegaEggScale else 1),
 	}
+	PowerupFx.decorateEgg(egg.model, mega, special)
 	egg.model.Parent = folder
 	placeEgg(egg, EggPhysics.position(origin, velocity, egg.t))
 	eggs[id] = egg
@@ -123,13 +136,18 @@ local function shoot()
 	nextLocalId += 1
 	local origin = EggPhysics.buttOrigin(root)
 	local direction = aimDirection(origin, character)
+	-- Draw it the way the server will load it (mega egg / special ammo).
+	local special = player:GetAttribute("SpecialEgg")
+	local ammo = player:GetAttribute("SpecialAmmo")
 	spawnVisual(
 		`{player.UserId}:{nextLocalId}`,
 		character,
 		origin,
 		direction * Config.Egg.Speed,
 		0,
-		ClientData.equipped("EggSkin")
+		ClientData.equipped("EggSkin"),
+		player:GetAttribute("Powerup") == "MegaEgg",
+		if type(special) == "string" and type(ammo) == "number" and ammo > 0 then special else nil
 	)
 	Remotes.ShootEgg:FireServer(direction, nextLocalId)
 	Sfx.play("EggShoot", { pitchJitter = 0.12 })
@@ -174,7 +192,7 @@ local function step(dt: number)
 		local t0 = egg.t
 		local t1 = math.min(t0 + dt, Config.Egg.Lifetime)
 		egg.t = t1
-		local position, result = EggPhysics.step(egg.origin, egg.velocity, t0, t1, egg.params)
+		local position, result = EggPhysics.step(egg.origin, egg.velocity, t0, t1, egg.params, egg.radius)
 		if result or t1 >= Config.Egg.Lifetime then
 			removeEgg(id)
 		else
@@ -189,16 +207,32 @@ function EggController.start()
 	folder.Parent = workspace
 
 	Remotes.EggFired.OnClientEvent:Connect(
-		function(id: string, shooterUserId: number, origin: Vector3, velocity: Vector3, firedAt: number, skin: string)
+		function(
+			id: string,
+			shooterUserId: number,
+			origin: Vector3,
+			velocity: Vector3,
+			firedAt: number,
+			skin: string,
+			mega: boolean?,
+			special: string?
+		)
 			local shooter = Players:GetPlayerByUserId(shooterUserId)
 			local elapsed = workspace:GetServerTimeNow() - firedAt
-			spawnVisual(id, shooter and shooter.Character, origin, velocity, elapsed, skin)
+			local loaded = if special and special ~= "" then special else nil
+			spawnVisual(id, shooter and shooter.Character, origin, velocity, elapsed, skin, mega == true, loaded)
 			Sfx.playAt("EggShoot", origin, { pitchJitter = 0.12 })
 		end
 	)
-	Remotes.EggHit.OnClientEvent:Connect(function(id: string, position: Vector3, hitEffect: string)
+	Remotes.EggHit.OnClientEvent:Connect(function(id: string, position: Vector3, hitEffect: string, special: string?)
 		removeEgg(id)
-		Effects.eggHit(position, hitEffect)
+		-- A bouncy egg's ricochet isn't a real splat.
+		if special ~= "Bounce" then
+			Effects.eggHit(position, hitEffect)
+		end
+		if special and special ~= "" then
+			PowerupFx.eggSplat(position, special)
+		end
 	end)
 
 	player:GetAttributeChangedSignal("Alive"):Connect(refreshBinding)

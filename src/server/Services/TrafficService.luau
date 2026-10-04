@@ -118,6 +118,18 @@ function TrafficService.stop()
 	RoundState:SetAttribute("TrafficParams", "")
 end
 
+-- The car (if any) overlapping a ball at `position` right now. Bouncy eggs ricochet off cars,
+-- which only exist as schedule math on the server.
+function TrafficService.carAt(position: Vector3, radius: number): TrafficSchedule.Car?
+	local s = schedule
+	if not s then
+		return nil
+	end
+	local T = Config.Traffic
+	local box = { x = position.X, z = position.Z, feetY = position.Y - radius, radius = radius }
+	return s:findHit(box, workspace:GetServerTimeNow(), Config.Map.RoadTopY, T.CarWidth, T.CarHeight, 0)
+end
+
 -- Sends an extra vehicle down the road (Road Rage cars, the median harvester). Everyone
 -- sees it after `delay` seconds; it's hit-checked like normal traffic.
 function TrafficService.launch(car: TrafficSchedule.Car, delay: number): boolean

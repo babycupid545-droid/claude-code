@@ -16,12 +16,15 @@ local RoundState = require(Shared.RoundState)
 local TrafficSchedule = require(Shared.TrafficSchedule)
 
 local Services = script.Parent
+local BountyService = require(Services.BountyService)
 local ChickenService = require(Services.ChickenService)
 local DataService = require(Services.DataService)
 local EggService = require(Services.EggService)
 local EventService = require(Services.EventService)
 local HazardService = require(Services.HazardService)
 local MapBuilder = require(Services.MapBuilder)
+local PowerupService = require(Services.PowerupService)
+local ProgressService = require(Services.ProgressService)
 local SidewalkService = require(Services.SidewalkService)
 local TrafficService = require(Services.TrafficService)
 
@@ -209,6 +212,7 @@ local function survivalReward(r: Round, player: Player)
 	local R = Config.Rewards
 	local coins = math.floor((now() - startedAt) / R.SurviveEvery) * R.SurviveCoins
 	DataService.reward(player, coins, "for surviving")
+	ProgressService.survived(player, now() - startedAt)
 end
 
 local function eliminate(r: Round, player: Player, reason: string, icon: string)
@@ -222,16 +226,21 @@ local function eliminate(r: Round, player: Player, reason: string, icon: string)
 	local egged = r.lastEgged[player]
 	local shooter = egged and egged.shooter
 	local window = Config.Rewards.KnockoutWindow
+	local killer: Player? = nil
 	if egged and shooter and shooter ~= player and shooter.Parent and (window <= 0 or os.clock() - egged.at <= window) then
+		killer = shooter
 		feed(`{shooter.DisplayName} egged {player.DisplayName} to their doom!`, "egg")
 		Remotes.Notify:FireClient(shooter, `KNOCKOUT! {player.DisplayName}`, "knockout", 0)
 		DataService.addStat(shooter, "Knockouts", 1)
 		DataService.reward(shooter, Config.Rewards.Knockout, "for the knockout")
+		ProgressService.knockout(shooter)
 		local kos = shooter:GetAttribute("RoundKOs")
 		shooter:SetAttribute("RoundKOs", (if type(kos) == "number" then kos else 0) + 1)
 	else
 		feed(`{player.DisplayName} {reason}`, icon)
 	end
+	PowerupService.clearPlayer(player)
+	BountyService.onEliminated(player, killer)
 	survivalReward(r, player)
 	if r.mode.roadRage and player.Parent and not isAfk(player) then
 		player:SetAttribute("Driver", true)
@@ -344,6 +353,7 @@ local function runCrossing(r: Round, roundStart: number)
 		if early then
 			feed(`Everyone made it! Back to the {Layout.sideName(leaving)} side!`, "check")
 		end
+		ProgressService.crossingDone(aliveList(r), target)
 		SidewalkService.dropSide(leaving)
 
 		-- The next deadline counts from this drop.
@@ -386,6 +396,8 @@ local function stopRound(r: Round?)
 	RoundState:SetAttribute("CrossDeadline", 0)
 	HazardService.stop()
 	EventService.stop()
+	PowerupService.stop()
+	BountyService.stop()
 	SidewalkService.reset(arena)
 	TrafficService.stop()
 	EggService.setRules({
@@ -476,6 +488,7 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 		end,
 		onHit = function(shooter, target)
 			r.lastEgged[target] = { shooter = shooter, at = os.clock() }
+			ProgressService.eggHit(shooter)
 		end,
 	})
 
@@ -507,6 +520,9 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 			if not r.alive[player] or RoundState:GetAttribute("State") ~= "InRound" then
 				return
 			end
+			if PowerupService.absorbCarHit(player, car) then
+				return
+			end
 			if car.vehicle == "Harvester" then
 				eliminate(r, player, "got harvested", "car")
 			elseif car.driver then
@@ -531,6 +547,8 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 	task.spawn(runCrossing, r, roundStart)
 	HazardService.start(arena, hazardContext)
 	EventService.run(events, roundStart, hazardContext)
+	PowerupService.start(hazardContext)
+	BountyService.start(hazardContext)
 
 	local suddenDeathAnnounced = false
 	local winners: { Player } = {}
@@ -599,6 +617,7 @@ local function giveRoundRewards(r: Round, winners: { Player })
 		if player.Parent then
 			DataService.addStat(player, "Rounds", 1)
 			DataService.reward(player, R.Participate, "for playing")
+			ProgressService.roundPlayed(player)
 			if r.alive[player] then
 				survivalReward(r, player)
 			end
@@ -608,6 +627,7 @@ local function giveRoundRewards(r: Round, winners: { Player })
 		if player.Parent then
 			DataService.addStat(player, "Wins", 1)
 			DataService.reward(player, if r.mode.teams then R.TeamWin else R.Win, "for winning!")
+			ProgressService.won(player, r.mode.teams)
 		end
 	end
 end

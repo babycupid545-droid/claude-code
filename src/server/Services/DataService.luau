@@ -13,6 +13,7 @@ local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local Cosmetics = require(Shared.Cosmetics)
 local PlayerData = require(Shared.PlayerData)
+local Progression = require(Shared.Progression)
 local Remotes = require(Shared.Remotes)
 
 -- ProfileStore's own generic types fight strict mode, so describe just what we use.
@@ -53,6 +54,9 @@ local function snapshot(player: Player, data: Data): PlayerData.Snapshot
 		equipped = data.Equipped,
 		stats = data.Stats,
 		vip = vip[player] == true,
+		progress = data.Progress,
+		quests = data.Quests,
+		season = data.Season,
 	}
 end
 
@@ -63,6 +67,10 @@ local function updateLeaderstats(player: Player, data: Data)
 	end
 	local wins = stats:FindFirstChild("Wins") :: IntValue?
 	local coins = stats:FindFirstChild("Coins") :: IntValue?
+	local level = stats:FindFirstChild("Level") :: IntValue?
+	if level then
+		level.Value = Progression.level(data.Progress.Xp, Config.Progress.Curve)
+	end
 	if wins then
 		wins.Value = data.Stats.Wins
 	end
@@ -108,6 +116,10 @@ local function onPlayerAdded(player: Player)
 	local wins = Instance.new("IntValue")
 	wins.Name = "Wins"
 	wins.Parent = stats
+	local level = Instance.new("IntValue")
+	level.Name = "Level"
+	level.Value = 1
+	level.Parent = stats
 	local coins = Instance.new("IntValue")
 	coins.Name = "Coins"
 	coins.Parent = stats
@@ -207,7 +219,7 @@ function DataService.addCoins(player: Player, amount: number)
 	end
 end
 
-function DataService.addStat(player: Player, stat: "Wins" | "Rounds" | "Knockouts", amount: number)
+function DataService.addStat(player: Player, stat: "Wins" | "Rounds" | "Knockouts" | "Crossings", amount: number)
 	local data = DataService.get(player)
 	if data then
 		data.Stats[stat] += amount

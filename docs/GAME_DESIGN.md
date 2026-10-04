@@ -175,5 +175,17 @@ away instead of waiting out the timer.
 Shop prices run from 200 (common) to 8000 (legendary); one exclusive per slot is Robux-only.
 All numbers are in `Config.Rewards` and `src/shared/Cosmetics.luau`.
 
+### Power-ups and bounty (built)
+Every few seconds a glowing pickup appears, mostly in a lane (risky to grab) and sometimes on the
+median, near the chickens. Power-ups: **Speed Boots** (faster for 6 s), **Shield** (the next car
+only shoves you out of its lane), **Mega Egg** (next egg is huge and hits much harder),
+**Extra Feather** (glide refilled and doubled for 8 s). Rarer special eggs load your next 3 eggs:
+**Sticky** (target slowed and grounded for 3 s), **Bouncy** (ricochets once off the ground or a car
+towards the nearest chicken), **Explosive** (knocks back everyone within 10 studs), **Golden**
+(steals 5 golden eggs from the target). The HUD shows what you hold above the egg/stamina bars.
+The chicken with the most knockouts this round (2+) wears a crown with a bounty on its head:
+20 golden eggs + 10 per knockout it had, paid to whoever knocks it out.
+Code: `PowerupService`, `BountyService`, `Shared/Powerups`; numbers in `Config.Powerups` / `Config.Bounty`.
+
 Not yet play-tested in Studio: the code type-checks and builds with Rojo, but Roblox physics and
 feel (jump height, glide, car speed, knockback) need tuning in `src/shared/Config.luau`.

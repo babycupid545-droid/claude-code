@@ -8,11 +8,13 @@
 --   Shop    tabs, item grid, item/pack card templates
 --   Emotes  emote picker
 --   Driver  Road Rage controls
+--   Progress  levels/titles, daily quests, season pass (built by ProgressGui.luau)
 --
 -- Layout is in pixels for a 1280x720 screen, inside each screen's Root frame; the client
 -- scales Root to fit (src/client/Gui.luau).
 
 local Kit = require(script.Parent.GuiKit)
+local ProgressGui = require(script.Parent.ProgressGui)
 
 local GuiBuilder = {}
 
@@ -119,6 +121,47 @@ local function buildStats(root: Frame)
 	Kit.stroke(T.Gold, 1.5, 0.2).Parent = track
 end
 
+-- Power-up chips, just above the egg and stamina bars: the power-up you hold (with its time
+-- left) and the special eggs you have loaded (with the ammo count). Hidden until you have one.
+local function powerupChip(parent: Instance, name: string, order: number)
+	local _, inner = Kit.card(name, V2(190, 44), "dark", { LayoutOrder = order, Visible = false, Parent = parent })
+	Kit.icon("Icon", if name == "Power" then "lightning" else "egg", 28, {
+		AnchorPoint = V2(0, 0.5),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		Parent = inner,
+	})
+	Kit.text("Title", "POWER-UP", 15, {
+		Position = UDim2.fromOffset(44, 2),
+		Size = UDim2.new(1, -50, 0, 20),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = inner,
+	})
+	-- Time left ("4s") or ammo ("x3"), next to the bar.
+	Kit.text("Value", "", 14, {
+		AnchorPoint = V2(1, 1),
+		Position = UDim2.new(1, -8, 1, -3),
+		Size = UDim2.fromOffset(40, 17),
+		TextColor3 = T.Text,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Parent = inner,
+	})
+	local bar = Kit.bar("Bar", V2(10, 5), T.Yellow, { AnchorPoint = V2(0, 1), Position = UDim2.new(0, 44, 1, -8), Parent = inner })
+	bar.Size = UDim2.new(1, -96, 0, 5)
+end
+
+local function buildPowerups(root: Frame)
+	local row = new("Frame", {
+		Name = "Powerups",
+		AnchorPoint = V2(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -100),
+		Size = UDim2.fromOffset(420, 44),
+		BackgroundTransparency = 1,
+		Parent = root,
+	}, { Kit.list("H", 8, "Center", "Center") })
+	powerupChip(row, "Power", 1)
+	powerupChip(row, "Special", 2)
+end
+
 local function buildObjective(root: Frame)
 	local _, inner = Kit.card("Objective", V2(420, 72), "dark", {
 		AnchorPoint = V2(0, 1),
@@ -153,12 +196,14 @@ local function buildButtons(root: Frame)
 		Size = UDim2.fromOffset(560, 48),
 		BackgroundTransparency = 1,
 		Parent = root,
-	}, { Kit.list("H", 8, "Left", "Center") })
-	Kit.button("Shop", "SHOP", "shop", V2(112, 48), nil, { LayoutOrder = 1, Parent = row })
-	Kit.button("Emotes", "EMOTES", "emote", V2(132, 48), nil, { LayoutOrder = 2, Parent = row })
-	Kit.button("Afk", "AFK", "clock", V2(96, 48), nil, { LayoutOrder = 3, Parent = row })
-	Kit.button("Music", nil, "speaker", V2(48, 48), nil, { LayoutOrder = 4, Parent = row })
-	Kit.button("Spectate", nil, "eye", V2(48, 48), nil, { LayoutOrder = 5, Visible = false, Parent = row })
+	}, { Kit.list("H", 6, "Left", "Center") })
+	-- Kept compact so the row ends before the stats bar (x 460 at 1280x720).
+	Kit.button("Shop", "SHOP", "shop", V2(100, 48), nil, { LayoutOrder = 1, Parent = row })
+	ProgressGui.hudButton(row, 2)
+	Kit.button("Emotes", "EMOTES", "emote", V2(120, 48), nil, { LayoutOrder = 3, Parent = row })
+	Kit.button("Afk", "AFK", "clock", V2(92, 48), nil, { LayoutOrder = 4, Parent = row })
+	Kit.button("Music", nil, "speaker", V2(48, 48), nil, { LayoutOrder = 5, Parent = row })
+	Kit.button("Spectate", nil, "eye", V2(48, 48), nil, { LayoutOrder = 6, Visible = false, Parent = row })
 end
 
 local function buildBoard(root: Frame, tpl: Folder)
@@ -257,7 +302,7 @@ local function buildFeedAndToasts(root: Frame, tpl: Folder)
 	new("Frame", {
 		Name = "Toasts",
 		AnchorPoint = V2(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -104),
+		Position = UDim2.new(0.5, 0, 1, -152), -- above the power-up chips
 		Size = UDim2.fromOffset(420, 180),
 		BackgroundTransparency = 1,
 		Parent = root,
@@ -559,6 +604,7 @@ local function buildHud(parent: Instance)
 	local tpl = templates(hud)
 	buildRoundCard(root)
 	buildStats(root)
+	buildPowerups(root)
 	buildObjective(root)
 	buildButtons(root)
 	buildBoard(root, tpl)
@@ -818,9 +864,9 @@ local function buildDriver(parent: Instance)
 	driver.Parent = parent
 end
 
-GuiBuilder.Names = { "Hud", "Shop", "Emotes", "Driver" }
+GuiBuilder.Names = { "Hud", "Shop", "Emotes", "Driver", "Progress" }
 -- Bump when the GUI changes enough that older built copies should be replaced.
-GuiBuilder.Version = 4
+GuiBuilder.Version = 6
 
 function GuiBuilder.build(parent: Instance, only: string?)
 	local builders: { [string]: (Instance) -> () } = {
@@ -828,6 +874,7 @@ function GuiBuilder.build(parent: Instance, only: string?)
 		Shop = buildShop,
 		Emotes = buildEmotes,
 		Driver = buildDriver,
+		Progress = ProgressGui.build,
 	}
 	for _, name in GuiBuilder.Names do
 		if (only == nil or only == name) and not parent:FindFirstChild(name) then

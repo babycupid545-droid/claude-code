@@ -2,6 +2,7 @@
 -- Shape of a player's saved data, shared so the client knows what DataSync sends.
 
 local Cosmetics = require(script.Parent.Cosmetics)
+local Progression = require(script.Parent.Progression)
 
 export type Equipped = {
 	ChickenSkin: string,
@@ -15,7 +16,19 @@ export type Stats = {
 	Wins: number,
 	Rounds: number,
 	Knockouts: number,
+	Crossings: number,
 }
+
+-- Levels and titles. Level is worked out from Xp (Progression.levelInfo).
+export type Progress = {
+	Xp: number, -- lifetime XP
+	Title: string, -- equipped title id ("" = none)
+	Titles: { [string]: boolean }, -- titles granted by the season pass (others unlock by level/stats)
+}
+
+export type Quest = Progression.Quest
+export type Quests = Progression.QuestState -- Day = UTC day number the quests are for
+export type Season = Progression.SeasonState -- Claimed keys are "F<tier>" / "P<tier>"
 
 export type Data = {
 	Coins: number,
@@ -24,6 +37,9 @@ export type Data = {
 	Stats: Stats,
 	-- Recent Robux receipt ids, so a purchase is never granted twice.
 	PurchaseIds: { string },
+	Progress: Progress,
+	Quests: Quests,
+	Season: Season,
 }
 
 -- What the server sends to the owning client.
@@ -33,6 +49,9 @@ export type Snapshot = {
 	equipped: Equipped,
 	stats: Stats,
 	vip: boolean,
+	progress: Progress,
+	quests: Quests,
+	season: Season,
 }
 
 local PlayerData = {}
@@ -52,8 +71,13 @@ function PlayerData.template(): Data
 			Wins = 0,
 			Rounds = 0,
 			Knockouts = 0,
+			Crossings = 0,
 		},
 		PurchaseIds = {},
+		-- Older saves get these filled in by Profile:Reconcile(); ProgressService repairs the rest.
+		Progress = { Xp = 0, Title = "Hatchling", Titles = {} },
+		Quests = { Day = 0, List = {}, Rerolls = 0 },
+		Season = { Id = "", Xp = 0, Claimed = {}, Premium = false },
 	}
 end
 

@@ -560,7 +560,8 @@ local function renderBoard(s: string)
 		end
 		row.LayoutOrder = i
 		row.Rank.Text = `{i}.`
-		row.Player.Text = p.DisplayName .. (if p:GetAttribute("Afk") == true then " (AFK)" else "")
+		local lv = p:GetAttribute("Level") -- set by ProgressService
+		row.Player.Text = (if type(lv) == "number" then `Lv{lv} ` else "") .. p.DisplayName .. (if p:GetAttribute("Afk") == true then " (AFK)" else "")
 		row.Value.Text = tostring(if inRound then knockouts(p) else wins(p))
 		local out = inRound and p:GetAttribute("Alive") ~= true
 		row.Player.TextTransparency = if out then 0.55 else 0
