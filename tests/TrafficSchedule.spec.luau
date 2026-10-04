@@ -16,9 +16,10 @@ local function params(seed: number): TrafficSchedule.Params
 	return {
 		seed = seed,
 		startTime = 1000,
+		-- Same as Layout.lanes: two two-way roads, each with two lanes driving -X and two +X.
 		lanes = {
-			{ z = -64, dir = 1 }, { z = -50, dir = 1 }, { z = -36, dir = 1 }, { z = -22, dir = 1 },
-			{ z = 22, dir = -1 }, { z = 36, dir = -1 }, { z = 50, dir = -1 }, { z = 64, dir = -1 },
+			{ z = -64, dir = -1 }, { z = -50, dir = -1 }, { z = -36, dir = 1 }, { z = -22, dir = 1 },
+			{ z = 22, dir = -1 }, { z = 36, dir = -1 }, { z = 50, dir = 1 }, { z = 64, dir = 1 },
 		},
 		roadLength = 240,
 		carLength = 14,
@@ -84,6 +85,28 @@ do
 	end
 	check("cars on road range", okRange)
 	check("cars follow lane direction", okDir)
+end
+
+-- Each car enters at the end its lane comes from and drives towards the other, so lanes
+-- going opposite ways on the same road both get traffic.
+do
+	local s = TrafficSchedule.new(params(13))
+	s:update(1030)
+	local okEntry, okMove = true, true
+	local seen: { [string]: boolean } = {}
+	for _, car in s:activeCars(1030) do
+		local entryX = s:carX(car, car.spawnTime)
+		if math.abs(entryX - -car.dir * (240 / 2 + 14 / 2)) > 1e-6 then
+			okEntry = false
+		end
+		if math.sign(s:carX(car, 1030.1) - s:carX(car, 1030)) ~= car.dir then
+			okMove = false
+		end
+		seen[`{math.sign(s:carZ(car))}:{car.dir}`] = true
+	end
+	check("cars enter at their lane's end", okEntry)
+	check("cars move the way their lane drives", okMove)
+	check("both directions have traffic on each road", seen["-1:1"] and seen["-1:-1"] and seen["1:1"] and seen["1:-1"] or false)
 end
 
 -- A chicken standing on a car gets hit; jumping above it does not.

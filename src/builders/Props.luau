@@ -1,6 +1,6 @@
 --!strict
--- Low-poly farm props: trees, rocks, bushes, hay bales, fences, barns, silos, windmills,
--- clouds, street lamps and floating islands.
+-- Low-poly farm props: trees, rocks, bushes, pumpkins, corn, hay bales, fences, benches,
+-- barns, silos, windmills, clouds, street lamps and floating islands.
 --
 -- Each prop uses the smooth Blender mesh (assets/models/Props.glb) when it has been imported
 -- into ReplicatedStorage.Assets.Meshes, and falls back to a part-built version otherwise.
@@ -248,6 +248,56 @@ function Props.grassTuft(parent: Instance, cf: CFrame)
 			Parent = parent,
 		})
 	end
+end
+
+function Props.pumpkin(parent: Instance, base: CFrame, scale: number?): Model
+	local k = scale or 1
+	local mesh = Props.mesh("Pumpkin", parent, base, { scale = k, yaw = rng():NextNumber(0, math.pi * 2) })
+	if mesh then
+		return mesh
+	end
+	local m = Build.model("Pumpkin", parent)
+	-- Two blocks turned 45 degrees make a chunky octagonal pumpkin.
+	for _, yaw in { 0, math.rad(45) } do
+		Build.part({ Size = Vector3.new(2.3, 1.9, 2.3) * k, CFrame = base * CFrame.new(0, 0.95 * k, 0) * CFrame.Angles(0, yaw, 0), Color = rgb(240, 130, 40), Parent = m })
+	end
+	Build.part({ Size = Vector3.new(0.3, 0.6, 0.3) * k, CFrame = base * CFrame.new(0, 2.1 * k, 0), Color = rgb(120, 170, 70), Parent = m })
+	return m
+end
+
+function Props.corn(parent: Instance, base: CFrame): Model
+	local mesh = Props.mesh("Corn", parent, base, { yaw = rng():NextNumber(0, math.pi * 2) })
+	if mesh then
+		return mesh
+	end
+	local m = Build.model("Corn", parent)
+	local stalk = rgb(120, 170, 70)
+	Build.part({ Size = Vector3.new(0.5, 7.5, 0.5), CFrame = base * CFrame.new(0, 3.75, 0), Color = stalk, Parent = m })
+	for i, yaw in { 0.4, 2.5, 4.6 } do
+		Build.part({
+			Size = Vector3.new(2.2, 0.2, 0.7),
+			CFrame = base * CFrame.new(0, 2 + i * 1.5, 0) * CFrame.Angles(0, yaw, math.rad(-25)) * CFrame.new(1.1, 0, 0),
+			Color = Build.vary(stalk, 0.05),
+			Parent = m,
+		})
+	end
+	Build.part({ Size = Vector3.new(0.8, 1.8, 0.8), CFrame = base * CFrame.new(0.5, 5, 0), Color = rgb(250, 210, 80), Parent = m })
+	return m
+end
+
+-- A wooden bench; whoever sits on it looks towards the bench's -Z.
+function Props.bench(parent: Instance, base: CFrame): Model
+	local m = Build.model("Bench", parent)
+	local wood = Build.vary(Palette.Wood, 0.03)
+	Build.part({ Size = Vector3.new(6, 0.4, 2), CFrame = base * CFrame.new(0, 1.6, 0), Color = wood, Parent = m })
+	Build.part({ Size = Vector3.new(6, 1.4, 0.3), CFrame = base * CFrame.new(0, 2.9, 0.85), Color = wood, Parent = m })
+	for _, x in { -2.5, 2.5 } do
+		for _, z in { -0.7, 0.7 } do
+			Build.part({ Size = Vector3.new(0.4, 1.4, 0.4), CFrame = base * CFrame.new(x, 0.7, z), Color = Palette.WoodDark, Parent = m })
+		end
+		Build.part({ Size = Vector3.new(0.4, 1.6, 0.3), CFrame = base * CFrame.new(x, 2.4, 0.85), Color = Palette.WoodDark, Parent = m })
+	end
+	return m
 end
 
 -- Big red barn doors standing open at the end of the median, `width` wide.

@@ -36,8 +36,10 @@ Config.Map = {
 	WallHeight = 80,
 	-- Anything below this is eliminated (fell off the map).
 	KillY = -40,
-	LobbyCenter = Vector3.new(0, 70, -205),
-	LobbySize = Vector3.new(90, 1, 50),
+	-- The lobby floats above and behind side A. Its viewing deck sticks out a further 12
+	-- studs towards the road (+Z) from the front edge of LobbySize.
+	LobbyCenter = Vector3.new(0, 70, -222),
+	LobbySize = Vector3.new(140, 1, 84),
 	-- What players call each side (signs and HUD).
 	SideNames = { A = "BARN", B = "WINDMILL" },
 }

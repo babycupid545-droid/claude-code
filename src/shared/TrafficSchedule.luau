@@ -17,6 +17,7 @@ export type Ramp = {
 	maxMult: number,
 }
 
+-- dir: +1 drives towards +X, -1 towards -X. Lanes can mix directions (the roads are two-way).
 export type LaneSpec = { z: number, dir: number }
 
 -- A stretch of the round where traffic is faster/denser (events like Speed Demons).

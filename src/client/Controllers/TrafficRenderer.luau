@@ -10,7 +10,6 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.Shared
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
-local Layout = require(Shared.Layout)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
 local TrafficSchedule = require(Shared.TrafficSchedule)
@@ -276,23 +275,22 @@ local function buildWarningLights(s: TrafficSchedule.Schedule)
 		light:Destroy()
 	end
 	table.clear(warningLights)
-	for lane, spec in Layout.lanes do
-		for _, dir in { spec.dir } do
-			-- The light sits on the tunnel the car comes out of.
-			local x = -dir * (M.RoadLength / 2 - 0.4)
-			warningLights[laneLightKey(lane, dir)] = Ui.new("Part", {
-				Name = "LaneWarning",
-				Anchored = true,
-				CanCollide = false,
-				CanQuery = false,
-				CanTouch = false,
-				Size = Vector3.new(0.4, 2.5, M.LaneWidth * 0.6),
-				Position = Vector3.new(x, M.RoadTopY + 8, spec.z),
-				Material = Enum.Material.Neon,
-				Color = Color3.fromRGB(60, 20, 20),
-				Parent = folder,
-			})
-		end
+	for lane, spec in s.params.lanes do
+		-- The light sits on the tunnel the lane's cars come out of. Each road is two-way, so
+		-- every tunnel mouth has lights over half its lanes.
+		local x = -spec.dir * (M.RoadLength / 2 - 0.4)
+		warningLights[laneLightKey(lane, spec.dir)] = Ui.new("Part", {
+			Name = "LaneWarning",
+			Anchored = true,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			Size = Vector3.new(0.4, 2.5, M.LaneWidth * 0.6),
+			Position = Vector3.new(x, M.RoadTopY + 8, spec.z),
+			Material = Enum.Material.Neon,
+			Color = Color3.fromRGB(60, 20, 20),
+			Parent = folder,
+		})
 	end
 	-- Big flashing lights over the median barn gates for the harvester.
 	for _, dir in { 1, -1 } do

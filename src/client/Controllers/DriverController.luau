@@ -1,6 +1,7 @@
 --!strict
 -- Road Rage: once squashed you get a top-down view of the road, pick a lane, and send a
--- car down it from either end.
+-- car down it. The car drives the way that lane's traffic goes (each road is two-way), so
+-- the lane marker shows arrows for the direction.
 
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
@@ -30,14 +31,24 @@ local gui: ScreenGui
 local cooldownFill: Frame
 local hint: TextLabel
 local laneMarker: Part? = nil
+local markerArrows: { Part } = {}
 
-local function laneZ(index: number): number
-	return Layout.lanes[index].z
-end
+local ARROW_XS = { -120, -60, 0, 60, 120 }
 
 local function updateMarker()
-	if laneMarker then
-		laneMarker.Position = Vector3.new(0, M.RoadTopY + 0.2, laneZ(lane))
+	local marker = laneMarker
+	if not marker then
+		return
+	end
+	local spec = Layout.lanes[lane]
+	marker.Position = Vector3.new(0, M.RoadTopY + 0.2, spec.z)
+	-- Chevrons (two arms each) pointing the way cars drive in this lane.
+	for i, arm in markerArrows do
+		local x = ARROW_XS[math.ceil(i / 2)]
+		local side = if i % 2 == 0 then 1 else -1
+		arm.CFrame = CFrame.new(x, M.RoadTopY + 0.35, spec.z)
+			* CFrame.Angles(0, (if spec.dir > 0 then 0 else math.pi) + side * math.rad(40), 0)
+			* CFrame.new(-2.6, 0, 0)
 	end
 end
 
@@ -47,7 +58,7 @@ local function changeLane(delta: number)
 	updateMarker()
 end
 
-local function launch(dir: number)
+local function launch()
 	if os.clock() - lastLaunch < Config.RoadRage.Cooldown then
 		Sfx.play("Error")
 		return
@@ -69,10 +80,8 @@ local function onAction(name: string, state: Enum.UserInputState): Enum.ContextA
 		changeLane(-1)
 	elseif name == "DriverDown" then
 		changeLane(1)
-	elseif name == "DriverLeft" then
-		launch(-1)
-	elseif name == "DriverRight" then
-		launch(1)
+	elseif name == "DriverLeft" or name == "DriverRight" then
+		launch()
 	end
 	return Enum.ContextActionResult.Sink
 end
@@ -104,6 +113,23 @@ local function setActive(on: boolean)
 			Transparency = 0.7,
 			Parent = workspace,
 		})
+		for _ = 1, #ARROW_XS * 2 do
+			table.insert(
+				markerArrows,
+				Ui.new("Part", {
+					Name = "Arrow",
+					Anchored = true,
+					CanCollide = false,
+					CanQuery = false,
+					CanTouch = false,
+					Size = Vector3.new(6, 0.2, 1.2),
+					Material = Enum.Material.Neon,
+					Color = Color3.fromRGB(255, 240, 230),
+					Transparency = 0.2,
+					Parent = laneMarker,
+				})
+			)
+		end
 		updateMarker()
 		ContextActionService:BindAction("DriverUp", onAction, false, Enum.KeyCode.W, Enum.KeyCode.Up, Enum.KeyCode.DPadUp)
 		ContextActionService:BindAction("DriverDown", onAction, false, Enum.KeyCode.S, Enum.KeyCode.Down, Enum.KeyCode.DPadDown)
@@ -120,6 +146,7 @@ local function setActive(on: boolean)
 			laneMarker:Destroy()
 			laneMarker = nil
 		end
+		table.clear(markerArrows)
 		for _, name in { "DriverUp", "DriverDown", "DriverLeft", "DriverRight" } do
 			ContextActionService:UnbindAction(name)
 		end
@@ -136,12 +163,8 @@ local function bindGui()
 	controls.Down.Activated:Connect(function()
 		changeLane(1)
 	end)
-	controls.Left.Activated:Connect(function()
-		launch(-1)
-	end)
-	controls.Right.Activated:Connect(function()
-		launch(1)
-	end)
+	controls.Left.Activated:Connect(launch)
+	controls.Right.Activated:Connect(launch)
 	cooldownFill = Gui.find(gui, "Root/Controls/Cooldown/Fill")
 	hint = Gui.find(gui, "Root/Controls/Cooldown/Hint")
 end
@@ -174,7 +197,9 @@ function DriverController.start()
 		local ready = left <= 0
 		cooldownFill.Size = UDim2.fromScale(math.clamp(1 - left / Config.RoadRage.Cooldown, 0, 1), 1)
 		cooldownFill.BackgroundColor3 = if ready then Color3.fromRGB(110, 230, 120) else Color3.fromRGB(255, 201, 60)
-		hint.Text = if ready then `LANE {lane} - READY!` else string.format("RELOADING %.1f", left)
+		-- The camera looks towards -Z, so +X is screen-right.
+		local arrow = if Layout.lanes[lane].dir > 0 then "→" else "←"
+		hint.Text = if ready then `LANE {lane} {arrow} READY!` else string.format("RELOADING %.1f", left)
 	end)
 end
 

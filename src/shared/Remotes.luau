@@ -8,7 +8,7 @@ local NAMES = {
 	-- client -> server
 	"Vote", -- (modeId: string)
 	"ShootEgg", -- (direction: Vector3, localId: number)
-	"LaunchRageCar", -- (lane: number, dir: number)
+	"LaunchRageCar", -- (lane: number) send a car down that lane (it drives the lane's way)
 	"BuyItem", -- (itemId: string) buy a cosmetic with coins
 	"EquipItem", -- (itemId: string) equip (emotes: toggle in/out of the emote wheel)
 	"Emote", -- (itemId: string)

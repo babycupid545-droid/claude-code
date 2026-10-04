@@ -43,7 +43,7 @@ command bar, and (optionally) upload the 5 asset files and paste their ids.
 
 You should see:
 
-- A farm lobby on a floating island, looking down at a 6-lane road in the sky.
+- A farm lobby on a floating island, looking down at two 4-lane, two-way roads in the sky.
 - A top bar saying **VOTE!** with a timer, and mode cards at the bottom (Solo and Rush Hour;
   Teams and Road Rage need 2 players).
 - After the vote and a 5 s countdown, you're on a sidewalk, cars fly past, and the bar says

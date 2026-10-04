@@ -19,13 +19,18 @@ Layout.innerEdge = Layout.medianHalf + Layout.roadDepth -- where the sidewalks s
 Layout.outerEdge = Layout.innerEdge + M.SidewalkDepth -- far edge of the sidewalks
 Layout.halfLength = M.RoadLength / 2
 
--- Lanes ordered from side A to side B. Road A traffic drives +X, road B traffic drives -X.
+-- Lanes ordered from side A to side B. Each road is a two-way road with right-hand traffic:
+-- the two lanes on its -Z half drive -X, the two on its +Z half drive +X, with a double
+-- yellow centre line between them. Both roads use the same pattern:
+--   sidewalk A | <- <- || -> -> | median | <- <- || -> -> | sidewalk B
 local lanes: { Lane } = {}
-for i = M.LanesPerRoad, 1, -1 do
-	table.insert(lanes, { z = -Layout.medianHalf - (i - 0.5) * M.LaneWidth, dir = 1, road = "A" })
+local half = math.floor(M.LanesPerRoad / 2)
+for i = 1, M.LanesPerRoad do
+	-- i counts from the road's -Z edge.
+	table.insert(lanes, { z = -Layout.innerEdge + (i - 0.5) * M.LaneWidth, dir = if i <= half then -1 else 1, road = "A" })
 end
 for i = 1, M.LanesPerRoad do
-	table.insert(lanes, { z = Layout.medianHalf + (i - 0.5) * M.LaneWidth, dir = -1, road = "B" })
+	table.insert(lanes, { z = Layout.medianHalf + (i - 0.5) * M.LaneWidth, dir = if i <= half then -1 else 1, road = "B" })
 end
 Layout.lanes = lanes
 
