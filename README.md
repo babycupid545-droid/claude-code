@@ -5,7 +5,8 @@ your butt to knock other chickens into it. Last chicken (or team) alive wins.
 
 - Design and plan: [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md)
 - Art brief: [`docs/ASSETS.md`](docs/ASSETS.md)
-- Setup + test checklist: [`docs/TESTING.md`](docs/TESTING.md)
+- **Studio setup (start here):** [`docs/STUDIO_SETUP.md`](docs/STUDIO_SETUP.md)
+- Test checklist: [`docs/TESTING.md`](docs/TESTING.md)
 
 ## Getting it into Roblox Studio
 
@@ -15,9 +16,9 @@ The code lives in this repo and is synced into Studio with [Rojo](https://rojo.s
    (installs the Rojo version pinned in `rokit.toml`).
 2. Install the Rojo plugin in Studio: run `rojo plugin install`.
 3. Run `rojo serve` in this folder.
-4. In Studio, open a new **Baseplate**, delete the `Baseplate` part and the default `SpawnLocation`
-   from Workspace, open the Rojo plugin, and click **Connect**.
-5. Press **Play**. In Studio you can test alone; live servers need 2 players.
+4. In Studio, open a new **Baseplate**, open the Rojo plugin, and click **Connect**.
+5. Run the build command from [`docs/STUDIO_SETUP.md`](docs/STUDIO_SETUP.md) in the command bar,
+   and upload the 5 asset files it lists. Then press **Play**. In Studio you can test alone; live servers need 2 players.
    To test multiplayer modes (Teams, Road Rage) use **Test → Clients and Servers** with 2+ players.
 6. Save the place, then publish it. In **Game Settings → Places**, set **Max Players to 16**.
 
@@ -45,10 +46,15 @@ The code lives in this repo and is synced into Studio with [Rojo](https://rojo.s
 ## Project layout
 
 ```
-src/shared/   Config (all tuning numbers), TrafficSchedule (deterministic cars), Modes, Remotes, ...
-src/server/   Services: RoundService (game loop), TrafficService, EggService, SidewalkService, ...
-src/client/   Controllers: TrafficRenderer, MovementController (glide), EggController, RoundUI, ...
-tests/        Plain-Luau tests for code that doesn't need Roblox
+src/shared/    Config (all tuning numbers), TrafficSchedule (deterministic cars), Modes, Cosmetics,
+               AssetIds (paste uploaded ids here), generated UiSprites / SoundSprites indexes
+src/builders/  Studio builders: world, lobby, cars, lighting, GUI (run once from the command bar)
+src/server/    Services: RoundService (game loop), TrafficService, EggService, DataService, ...
+src/client/    Controllers (HUD, shop, traffic, movement, eggs, music, world animation) + Anim,
+               Sfx, Sprites, CameraFx helpers
+assets/        UiSheet.png, Sfx.ogg and music to upload
+tools/         art/audio generators, and preview renderers for the world and GUI
+tests/         Plain-Luau tests for code that doesn't need Roblox
 ```
 
 ## Checks

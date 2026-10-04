@@ -1,8 +1,13 @@
 # Art brief (hand this to whoever makes the art)
 
-The game runs with **zero art**: every missing asset falls back to simple generated shapes.
-Art is added by dropping objects into these folders in Roblox Studio. Names must match exactly.
-Nothing in this list needs code changes.
+The game already ships with a full set of art made by its builders and generators:
+a low-poly world and cars (built into Studio by the command in `docs/STUDIO_SETUP.md`),
+a UI sprite sheet (`assets/ui/UiSheet.png`), 40 sound effects and 3 music loops (`assets/audio`).
+This brief is for **replacing or adding** art. Drop objects into these folders in Roblox Studio;
+names must match exactly. Nothing here needs code changes.
+
+Regenerate the sheet/sounds with `python3 tools/art/make_ui_sheet.py` and
+`python3 tools/audio/make_audio.py` after editing those scripts.
 
 > Tip for an AI chat helping with art: Claude can't upload meshes, but it **can** write a Luau
 > script for the Studio **command bar** (View → Command Bar) that builds a model out of Parts
@@ -24,7 +29,8 @@ ReplicatedStorage
     │   └── Glide         (Animation) played while gliding
     ├── Effects           (Folder)
     │   └── Feathers      chicken squashed by a car
-    └── Sounds            (Folder)  Sounds named EggHit, Feathers, Win
+    └── Sounds            (Folder)  Sounds named like any effect in SoundSprites.luau
+                                    (CarHorn, Bawk, EggHit, Coin...) replace that effect
 ServerStorage
 └── Assets                (Folder)
     ├── ArenaDecor        (Model/Folder) trees, buildings, street lamps around the road

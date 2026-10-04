@@ -28,21 +28,13 @@ Pick **one** of these:
 - **Terminal**: open a terminal in the project folder and run `rojo serve`.
   You should see `Rojo server listening on port 34872`.
 
-## 3. Connect Studio
+## 3. Connect Studio and build
 
-1. Open Roblox Studio → **New** → **Baseplate**.
-2. In the **Explorer**, delete `Workspace > Baseplate` and `Workspace > SpawnLocation`
-   (chickens must be able to fall off the map, and everyone must spawn in the lobby).
-3. **Plugins** tab → **Rojo** → **Connect**.
+Follow **`docs/STUDIO_SETUP.md`**: connect Rojo, run the one-line build command in the
+command bar, and (optionally) upload the 5 asset files and paste their ids.
 
-**It worked if** the Explorer now shows:
-
-- `ReplicatedStorage > Shared` (Config, Cosmetics, TrafficSchedule, ...)
-- `ServerScriptService > Server` (with `Services` and `Packages` inside)
-- `StarterPlayer > StarterPlayerScripts > Client` (with `Controllers` inside)
-
-Leave Rojo connected while you work. Code changes in VS Code appear in Studio instantly.
-**Don't edit the scripts inside Studio**: Rojo overwrites them with the files.
+**It worked if** the Explorer shows `Workspace > Arena`, `Workspace > Lobby` and
+`StarterGui > Hud / Shop / Emotes / Driver`.
 
 ## 4. Play
 
@@ -51,8 +43,8 @@ Leave Rojo connected while you work. Code changes in VS Code appear in Studio in
 
 You should see:
 
-- A glass lobby balcony looking down at a 6-lane road with grey sidewalks.
-- A top bar saying **Vote!** with a timer, and 2 mode cards at the bottom (Solo and Rush Hour;
+- A farm lobby on a floating island, looking down at a 6-lane road in the sky.
+- A top bar saying **VOTE!** with a timer, and mode cards at the bottom (Solo and Rush Hour;
   Teams and Road Rage need 2 players).
 - After the vote and a 5 s countdown, you're on a sidewalk, cars fly past, and the bar says
   **Cross the road!**
@@ -103,6 +95,15 @@ Tick these off and send back anything that's wrong, plus any red text from Outpu
 **Modes**
 - [ ] Rush Hour: traffic visibly speeds up over time.
 - [ ] Road Rage: after dying you get a top-down view; W/S pick a lane, A/D send a red car.
+
+**Look and sound** (after uploading the 5 asset files)
+- [ ] Icons show as cartoon images, not emoji.
+- [ ] Lobby music, round music, and sudden-death music switch at the right times.
+- [ ] Cars have engine sounds, whoosh past you, and lanes beep before a car comes out.
+- [ ] Buttons grow on hover and squish when clicked, with click sounds.
+- [ ] 3-2-1-GO countdown, results screen with coins counting up, sudden death banner.
+- [ ] Sidewalk tiles shake red, then tumble away and rise back up.
+- [ ] Windmills spin, islands bob, clouds drift.
 
 **Shop and cosmetics**
 - [ ] You get coins after a round ("+10 🪙 for playing" toasts).

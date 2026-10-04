@@ -162,7 +162,7 @@ src/
 | 4. Eggs with knockback | ✅ built |
 | 5. Voting, Teams, Rush Hour, Road Rage | ✅ built |
 | 6. Data saving, coins, shop, cosmetics | ✅ built (ProfileStore, Robux products, VIP, 5 cosmetic slots) |
-| 7. Polish (sounds, VFX, UI art) | ⏳ waiting on art |
+| 7. Polish: Studio-built low-poly world + GUI, sprite-sheet UI art, 40 SFX, 3 music loops, tweens | ✅ built |
 
 ### Economy (built)
 Coins per round: 10 for playing, 5 per 30 s survived, 15 per knockout (egging someone who dies
