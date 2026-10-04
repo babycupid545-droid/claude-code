@@ -508,6 +508,13 @@ local function runRound(mode: Modes.Mode): ({ Player }, string)
 			return r.alive[player] == true
 		end,
 	}
+	-- Every lane gets a fresh random direction each round; the markings follow and clients
+	-- pick the directions up from LaneDirs.
+	Layout.setDirections(Layout.randomDirections(rng))
+	RoundState:SetAttribute("LaneDirs", Layout.encodeDirections())
+	local worldBuilder = require(ReplicatedStorage:WaitForChild("Builders"):WaitForChild("WorldBuilder")) :: any
+	worldBuilder.applyLaneDirections(arena)
+
 	TrafficService.start({
 		rushHour = mode.rushHour,
 		startTime = trafficStart,

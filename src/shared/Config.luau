@@ -23,7 +23,7 @@ Config.Timing = {
 Config.Map = {
 	-- Two roads run along the X axis with a grass median between them; chickens cross along Z.
 	--   sidewalk A | road A | median | road B | sidewalk B
-	-- Each road is two-way: half its lanes drive -X, half +X (see Layout.lanes).
+	-- Every lane gets a random direction each round (see Layout.randomDirections).
 	RoadLength = 320,
 	LanesPerRoad = 4,
 	LaneWidth = 14,

@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.Shared
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
+local Layout = require(Shared.Layout)
 local Remotes = require(Shared.Remotes)
 local RoundState = require(Shared.RoundState)
 local TrafficSchedule = require(Shared.TrafficSchedule)
@@ -387,6 +388,15 @@ local function render()
 end
 
 function TrafficRenderer.start()
+	-- Lane directions are re-rolled every round; keep the shared layout in step with them.
+	local function syncLanes()
+		local dirs = RoundState:GetAttribute("LaneDirs")
+		if type(dirs) == "string" and dirs ~= "" then
+			Layout.setDirections(Layout.decodeDirections(dirs))
+		end
+	end
+	RoundState:GetAttributeChangedSignal("LaneDirs"):Connect(syncLanes)
+	syncLanes()
 	folder = Instance.new("Folder")
 	folder.Name = "Traffic"
 	folder.Parent = workspace

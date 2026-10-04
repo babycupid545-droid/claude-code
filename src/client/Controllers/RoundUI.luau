@@ -185,6 +185,27 @@ local function updateVoteCounts()
 	end
 end
 
+-- Once you've voted, the cards tuck away and only a small "voted" bar stays at the bottom;
+-- tapping it brings the cards back to change your vote.
+local voteCollapsed = false
+local VOTE_HEADER_OPEN = UDim2.fromScale(0.5, 0)
+local VOTE_HEADER_TUCKED = UDim2.new(0.5, 0, 1, -46)
+
+local function setVoteCollapsed(collapsed: boolean)
+	voteCollapsed = collapsed
+	local header = ui.vote.Header
+	local mode = if myVote then Modes.get(myVote) else nil
+	header.Inner.Title.Text = if collapsed and mode then `VOTED: {string.upper(mode.name)}` else "VOTE FOR A MODE"
+	Anim.tween(header, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		Position = if collapsed then VOTE_HEADER_TUCKED else VOTE_HEADER_OPEN,
+	})
+	if collapsed then
+		Anim.hide(ui.vote.Cards)
+	else
+		Anim.pop(ui.vote.Cards)
+	end
+end
+
 local function rebuildVotes()
 	for _, card in voteCards do
 		card:Destroy()
@@ -222,6 +243,12 @@ local function rebuildVotes()
 					Anim.punch(card, 0.08)
 					updateVoteCounts()
 				end
+				-- Get out of the way once the choice is made.
+				task.delay(0.35, function()
+					if myVote == id and state() == "Voting" then
+						setVoteCollapsed(true)
+					end
+				end)
 			end)
 			voteCards[id] = card
 		end
@@ -583,6 +610,10 @@ local function onStateChanged()
 	if s == "Voting" then
 		myVote = nil
 		roundCoins = 0
+		ui.vote.Header.Position = VOTE_HEADER_OPEN
+		ui.vote.Header.Inner.Title.Text = "VOTE FOR A MODE"
+		ui.vote.Cards.Visible = true
+		voteCollapsed = false
 		Anim.pop(ui.vote)
 		rebuildVotes()
 	elseif ui.vote.Visible then
@@ -604,11 +635,6 @@ local function onStateChanged()
 		if spectating then
 			resetCamera()
 		end
-	end
-	-- While voting, everything but the round card and the vote gets out of the way.
-	local voting = s == "Voting"
-	for _, widget in { ui.objective, ui.board, ui.feed, ui.stats, ui.buttons } do
-		Anim.setShown(widget, not voting)
 	end
 	Anim.punch(ui.roundCard, 0.06)
 	lastState = s
@@ -833,6 +859,21 @@ function RoundUI.start()
 	}
 	touchLayout()
 	Anim.autoJuice(hud)
+
+	-- Tap the tucked "voted" bar to change your vote.
+	local reopen = Instance.new("TextButton")
+	reopen.Name = "Reopen"
+	reopen.Text = ""
+	reopen.BackgroundTransparency = 1
+	reopen.Size = UDim2.fromScale(1, 1)
+	reopen.ZIndex = 10
+	reopen.Parent = ui.vote.Header
+	reopen.Activated:Connect(function()
+		if voteCollapsed and state() == "Voting" then
+			Sfx.play("UiClick")
+			setVoteCollapsed(false)
+		end
+	end)
 
 	RoundState:GetAttributeChangedSignal("State"):Connect(onStateChanged)
 	RoundState:GetAttributeChangedSignal("EndsAt"):Connect(function()

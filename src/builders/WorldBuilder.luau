@@ -97,6 +97,9 @@ local function buildRoads(arena: Model)
 		local minZ = if sign < 0 then -INNER else MEDIAN
 		line(lines, "EdgeWhite", Vector3.new(length, 0.06, 0.5), Vector3.new(0, y, minZ + 1), Palette.LaneLine)
 		line(lines, "EdgeWhite", Vector3.new(length, 0.06, 0.5), Vector3.new(0, y, minZ + Layout.roadDepth - 1), Palette.LaneLine)
+		-- Lane directions change every round, so both kinds of divider are built between every
+		-- pair of lanes and applyLaneDirections shows the right one: a double yellow line where
+		-- neighbours drive opposite ways, white dashes where they drive the same way.
 		for i = 1, #Layout.lanes - 1 do
 			local a, b = Layout.lanes[i], Layout.lanes[i + 1]
 			if a.road ~= b.road or math.sign(a.z) ~= sign then
@@ -105,15 +108,14 @@ local function buildRoads(arena: Model)
 			local z = (a.z + b.z) / 2
 			-- The lines stop at the crossing, so each one runs from the zebra out to a road end.
 			for _, side in { -1, 1 } do
-				if a.dir ~= b.dir then
-					for _, off in { -0.6, 0.6 } do
-						local size = Vector3.new(endX - CROSSING_HALF, 0.06, 0.55)
-						line(lines, "CenterYellow", size, Vector3.new(side * (CROSSING_HALF + endX) / 2, y, z + off), Palette.CenterLine)
-					end
-				else
-					for d = CROSSING_HALF + 4, endX - 8, 16 do
-						line(lines, "Dash", Vector3.new(8, 0.06, 0.45), Vector3.new(side * (d + 4), y, z), Palette.LaneLine)
-					end
+				for _, off in { -0.6, 0.6 } do
+					local size = Vector3.new(endX - CROSSING_HALF, 0.06, 0.55)
+					line(lines, "CenterYellow", size, Vector3.new(side * (CROSSING_HALF + endX) / 2, y, z + off), Palette.CenterLine)
+						:SetAttribute("Between", i)
+				end
+				for d = CROSSING_HALF + 4, endX - 8, 16 do
+					line(lines, "Dash", Vector3.new(8, 0.06, 0.45), Vector3.new(side * (d + 4), y, z), Palette.LaneLine)
+						:SetAttribute("Between", i)
 				end
 			end
 		end
@@ -122,14 +124,23 @@ local function buildRoads(arena: Model)
 			line(lines, "Zebra", Vector3.new(16, 0.07, 2.4), Vector3.new(0, y + 0.005, sign * z), Palette.LaneLine)
 		end
 	end
-	for _, lane in Layout.lanes do
-		-- Stop line before the crossing, on the side the lane's traffic comes from.
-		line(lines, "StopLine", Vector3.new(1.4, 0.06, M.LaneWidth - 1.4), Vector3.new(-lane.dir * (CROSSING_HALF + 3), y, lane.z), Palette.LaneLine)
-		-- Arrows pointing the way traffic drives, spread along the lane with one just before
-		-- the stop line.
-		for _, x in { -HALF_L + 30, -75, -26, 45, HALF_L - 30 } do
-			arrow(lines, Vector3.new(lane.dir * x, y + 0.01, lane.z), lane.dir)
+	for i, lane in Layout.lanes do
+		-- Stop lines before the crossing on both sides; only the one on the side the lane's
+		-- traffic comes from shows.
+		for _, side in { -1, 1 } do
+			local stop = line(lines, "StopLine", Vector3.new(1.4, 0.06, M.LaneWidth - 1.4), Vector3.new(side * (CROSSING_HALF + 3), y, lane.z), Palette.LaneLine)
+			stop:SetAttribute("Lane", i)
+			stop:SetAttribute("Side", side)
 		end
+		-- Arrows pointing the way traffic drives (built for +X, turned around the lane centre
+		-- by applyLaneDirections), spread along the lane with one just before the stop line.
+		local arrows = Build.model("LaneArrows", lines)
+		for _, x in { -HALF_L + 30, -75, -26, 45, HALF_L - 30 } do
+			arrow(arrows, Vector3.new(x, y + 0.01, lane.z), 1)
+		end
+		arrows.WorldPivot = CFrame.new(0, y, lane.z)
+		arrows:SetAttribute("Lane", i)
+		arrows:SetAttribute("Dir", 1)
 	end
 	-- Red/white curbs along the sidewalks and the median.
 	for _, z in { -INNER + 0.6, INNER - 0.6, -MEDIAN - 0.6, MEDIAN + 0.6 } do
@@ -462,6 +473,36 @@ local function buildScenery(decor: Instance)
 	end
 end
 
+-- Makes the road markings match the current lane directions (Layout.lanes): flips each lane's
+-- arrows, and shows the stop lines and centre lines that fit. Called when a round re-rolls the
+-- directions (and after building).
+function WorldBuilder.applyLaneDirections(arena: Instance)
+	local road = arena:FindFirstChild("Road")
+	local lines = road and road:FindFirstChild("Lines")
+	if not lines then
+		return
+	end
+	for _, d in lines:GetChildren() do
+		local laneIndex = d:GetAttribute("Lane")
+		local between = d:GetAttribute("Between")
+		if d:IsA("Model") and d.Name == "LaneArrows" and type(laneIndex) == "number" then
+			local lane = Layout.lanes[laneIndex]
+			if lane and d:GetAttribute("Dir") ~= lane.dir then
+				d:PivotTo(d:GetPivot() * CFrame.Angles(0, math.pi, 0))
+				d:SetAttribute("Dir", lane.dir)
+			end
+		elseif d:IsA("BasePart") and d.Name == "StopLine" and type(laneIndex) == "number" then
+			local lane = Layout.lanes[laneIndex]
+			d.Transparency = if lane and d:GetAttribute("Side") == -lane.dir then 0 else 1
+		elseif d:IsA("BasePart") and type(between) == "number" then
+			local a, b = Layout.lanes[between], Layout.lanes[between + 1]
+			local opposite = a ~= nil and b ~= nil and a.dir ~= b.dir
+			local show = if d.Name == "CenterYellow" then opposite else not opposite
+			d.Transparency = if show then 0 else 1
+		end
+	end
+end
+
 function WorldBuilder.buildArena(parent: Instance): Model
 	Build.reseed(1001)
 	local arena = Build.model("Arena")
@@ -474,6 +515,7 @@ function WorldBuilder.buildArena(parent: Instance): Model
 	buildTunnel(decor, 1)
 	buildScenery(decor)
 	Build.decorative(decor)
+	WorldBuilder.applyLaneDirections(arena)
 	arena.Parent = parent
 	return arena
 end

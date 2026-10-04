@@ -22,7 +22,7 @@ local LightingBuilder = require(script.Parent.LightingBuilder)
 local WorldBuilder = require(script.Parent.WorldBuilder)
 
 -- Bump when the arena or lobby layout changes so older built copies get replaced.
-local WORLD_VERSION = 3
+local WORLD_VERSION = 4
 
 local function childFolder(parent: Instance, name: string): Folder
 	local existing = parent:FindFirstChild(name)
