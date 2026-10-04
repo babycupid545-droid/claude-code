@@ -5,13 +5,13 @@
 
 local ids = {
 	-- assets/ui/UiSheet.png  (Image)
-	UiSheet = 0,
+	UiSheet = 74198106090898,
 	-- assets/audio/Sfx.ogg  (Audio) - every sound effect in one file
-	Sfx = 0,
+	Sfx = 91824233357331,
 	-- assets/audio/*.ogg  (Audio) - music loops
-	MusicLobby = 0,
-	MusicRound = 0,
-	MusicSuddenDeath = 0,
+	MusicLobby = 127732959707686,
+	MusicRound = 92407757121776,
+	MusicSuddenDeath = 126264889973948,
 }
 
 local AssetIds = {}
